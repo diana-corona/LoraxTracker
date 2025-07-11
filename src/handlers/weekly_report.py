@@ -77,16 +77,16 @@ def get_all_users() -> List[User]:
 
 def generate_shopping_list(items: Dict[str, List[str]]) -> str:
     """Generate formatted shopping list."""
-    sections = ["🛒 Lista de Compras para la Próxima Semana"]
+    sections = ["🛒 Shopping List for Next Week"]
     
     emoji_map = {
-        "proteinas": "🥩",
-        "vegetales": "🥬",
-        "frutas": "🍎",
-        "grasas": "🥑",
-        "carbohidratos": "🥖",
-        "suplementos": "💊",
-        "otros": "🧂"
+        "proteins": "🥩",
+        "vegetables": "🥬",
+        "fruits": "🍎",
+        "fats": "🥑",
+        "carbs": "🥖",
+        "supplements": "💊",
+        "others": "🧂"
     }
     
     for category, ingredients in items.items():
@@ -127,14 +127,14 @@ async def send_weekly_report(user: User) -> None:
     # Current phase
     current_phase = get_current_phase(cycle_events)
     phase_report = generate_phase_report(current_phase, cycle_events)
-    sections.append("📅 Estado Actual\n" + phase_report)
+    sections.append("📅 Current Status\n" + phase_report)
     
     # Next cycle prediction
     next_date, duration, warning = calculate_next_cycle(cycle_events)
     prediction = [
-        "🔮 Próximo Ciclo",
-        f"Fecha esperada: {next_date}",
-        f"Duración promedio: {duration} días"
+        "🔮 Next Cycle",
+        f"Expected date: {next_date}",
+        f"Average duration: {duration} days"
     ]
     if warning:
         prediction.append(f"⚠️ {warning}")
@@ -143,16 +143,16 @@ async def send_weekly_report(user: User) -> None:
     # Recent symptoms
     recent_events = get_recent_events(cycle_events)
     if recent_events:
-        symptoms = ["📋 Síntomas Recientes"]
+        symptoms = ["📋 Recent Symptoms"]
         for event in recent_events:
             if event.pain_level or event.energy_level or event.notes:
-                symptoms.append(f"\nFecha: {event.date}")
+                symptoms.append(f"\nDate: {event.date}")
                 if event.pain_level:
-                    symptoms.append(f"Dolor: {'⭐' * event.pain_level}")
+                    symptoms.append(f"Pain: {'⭐' * event.pain_level}")
                 if event.energy_level:
-                    symptoms.append(f"Energía: {'⚡' * event.energy_level}")
+                    symptoms.append(f"Energy: {'⚡' * event.energy_level}")
                 if event.notes:
-                    symptoms.append(f"Notas: {event.notes}")
+                    symptoms.append(f"Notes: {event.notes}")
         sections.append("\n".join(symptoms))
     
     # Generate shopping list for next week
@@ -164,7 +164,7 @@ async def send_weekly_report(user: User) -> None:
     report = "\n\n".join(sections)
     await telegram.send_message(
         chat_id=user.chat_id_private,
-        text=f"📊 Reporte Semanal\n\n{report}"
+        text=f"📊 Weekly Report\n\n{report}"
     )
     
     # Send to group chat if configured
@@ -174,7 +174,7 @@ async def send_weekly_report(user: User) -> None:
         group_report = "\n\n".join(group_sections)
         await telegram.send_message(
             chat_id=user.chat_id_group,
-            text=f"📊 Reporte Semanal de {user.name or 'Usuario'}\n\n{group_report}"
+            text=f"📊 Weekly Report for {user.name or 'User'}\n\n{group_report}"
         )
 
 def get_recent_events(events: List[CycleEvent]) -> List[CycleEvent]:

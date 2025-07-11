@@ -25,7 +25,7 @@ class RegistrationRequest(BaseModel):
     chat_id_private: str
     chat_id_group: Optional[str] = None
     partner_id: Optional[str] = None
-    user_type: str = Field(..., pattern="^(principal|pareja)$")
+    user_type: str = Field(..., pattern="^(primary|partner)$")
     name: Optional[str] = None
 
 @logger.inject_lambda_context
@@ -93,19 +93,19 @@ async def register_user(request: RegistrationRequest) -> Dict:
     
     # Send welcome message
     welcome_text = (
-        f"¡Hola {user.name or 'Usuario'}! 👋\n\n"
+        f"Hello {user.name or 'User'}! 👋\n\n"
     )
     
     if existing_user:
-        welcome_text += "Tu perfil ha sido actualizado exitosamente."
+        welcome_text += "Your profile has been successfully updated."
     else:
         welcome_text += (
-            "¡Bienvenida a Lorax! 🌙\n\n"
-            "Estoy aquí para ayudarte a registrar y entender tu ciclo menstrual.\n\n"
-            "Puedes usar estos comandos:\n"
-            "/registrar YYYY-MM-DD - Registrar un evento del ciclo\n"
-            "/fase - Ver tu fase actual\n"
-            "/prediccion - Ver predicción del próximo ciclo"
+            "Welcome to Lorax! 🌙\n\n"
+            "I'm here to help you track and understand your menstrual cycle.\n\n"
+            "You can use these commands:\n"
+            "/register YYYY-MM-DD - Register a cycle event\n"
+            "/phase - View your current phase\n"
+            "/prediction - View next cycle prediction"
         )
     
     await telegram.send_message(
@@ -117,7 +117,7 @@ async def register_user(request: RegistrationRequest) -> Dict:
         # Send group welcome message
         await telegram.send_message(
             chat_id=user.chat_id_group,
-            text=f"¡{user.name or 'Nueva usuaria'} se ha unido al grupo! 🎉"
+            text=f"🎉 {user.name or 'New user'} has joined the group!"
         )
     
     return {
@@ -178,12 +178,12 @@ async def link_partner(
     # Send notifications
     await telegram.send_message(
         chat_id=user_obj.chat_id_private,
-        text=f"Te has vinculado con {partner_obj.name or 'tu pareja'} 💕"
+        text=f"You have been linked with {partner_obj.name or 'your partner'} 💕"
     )
     
     await telegram.send_message(
         chat_id=partner_obj.chat_id_private,
-        text=f"Te has vinculado con {user_obj.name or 'tu pareja'} 💕"
+        text=f"You have been linked with {user_obj.name or 'your partner'} 💕"
     )
     
     return {
