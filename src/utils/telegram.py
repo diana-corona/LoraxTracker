@@ -1,0 +1,175 @@
+"""
+Telegram bot utility functions for message handling.
+"""
+import os
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+import json
+
+from telegram import Update, Bot
+from telegram.ext import Application, ContextTypes
+
+class TelegramClient:
+    """Client for interacting with Telegram Bot API."""
+    
+    def __init__(self):
+        self.token = os.environ["TELEGRAM_BOT_TOKEN"]
+        self.bot = Bot(token=self.token)
+    
+    async def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        reply_markup: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a message to a specific chat.
+        
+        Args:
+            chat_id: Telegram chat ID
+            text: Message text
+            reply_markup: Optional keyboard markup
+            
+        Returns:
+            Response from Telegram API
+        """
+        return await self.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    
+    async def send_phase_report(
+        self,
+        chat_id: str,
+        phase_report: str
+    ) -> Dict[str, Any]:
+        """
+        Send a formatted phase report.
+        
+        Args:
+            chat_id: Telegram chat ID
+            phase_report: Formatted phase report text
+            
+        Returns:
+            Response from Telegram API
+        """
+        return await self.send_message(
+            chat_id=chat_id,
+            text=f"<pre>{phase_report}</pre>"
+        )
+    
+    async def send_recommendation(
+        self,
+        chat_id: str,
+        recommendations: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Send formatted recommendations.
+        
+        Args:
+            chat_id: Telegram chat ID
+            recommendations: List of recommendation objects
+            
+        Returns:
+            Response from Telegram API
+        """
+        message = ["🌙 Recomendaciones personalizadas:\n"]
+        
+        for rec in recommendations:
+            priority_stars = "⭐" * rec["priority"]
+            message.append(
+                f"{priority_stars}\n"
+                f"<b>{rec['category'].title()}</b>\n"
+                f"{rec['description']}\n"
+            )
+        
+        return await self.send_message(
+            chat_id=chat_id,
+            text="\n".join(message)
+        )
+    
+    def create_inline_keyboard(
+        self,
+        buttons: List[List[Dict[str, str]]]
+    ) -> Dict[str, List[List[Dict[str, str]]]]:
+        """
+        Create an inline keyboard markup.
+        
+        Args:
+            buttons: List of button rows with text and callback data
+            
+        Returns:
+            Keyboard markup dictionary
+        """
+        return {
+            "inline_keyboard": buttons
+        }
+    
+    def parse_callback_data(self, callback_data: str) -> Dict[str, Any]:
+        """
+        Parse callback data from button presses.
+        
+        Args:
+            callback_data: JSON string from callback query
+            
+        Returns:
+            Parsed callback data
+        """
+        try:
+            return json.loads(callback_data)
+        except json.JSONDecodeError:
+            return {"action": callback_data}
+
+def format_error_message(error: Exception) -> str:
+    """Format error message for user display."""
+    return (
+        "❌ Lo siento, ha ocurrido un error.\n"
+        "Por favor intenta nuevamente más tarde."
+    )
+
+def create_rating_keyboard() -> Dict[str, List[List[Dict[str, str]]]]:
+    """Create rating keyboard with 1-5 stars."""
+    buttons = [[{
+        "text": "⭐" * i,
+        "callback_data": json.dumps({
+            "action": "rate",
+            "value": i
+        })
+    } for i in range(1, 6)]]
+    
+    return {
+        "inline_keyboard": buttons
+    }
+
+def parse_command(text: str) -> tuple[str, List[str]]:
+    """
+    Parse command and arguments from message text.
+    
+    Args:
+        text: Raw message text
+        
+    Returns:
+        Tuple of (command, arguments)
+    """
+    parts = text.split()
+    command = parts[0].lower()
+    args = parts[1:] if len(parts) > 1 else []
+    
+    return command, args
+
+def validate_date(date_str: str) -> Optional[datetime]:
+    """
+    Validate and parse date string.
+    
+    Args:
+        date_str: Date string in YYYY-MM-DD format
+        
+    Returns:
+        Datetime object if valid, None otherwise
+    """
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return None

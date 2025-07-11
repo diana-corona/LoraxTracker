@@ -1,0 +1,10 @@
+aws-lambda-powertools
+boto3
+python-telegram-bot
+pydantic
+mypy
+pytest
+pytest-asyncio
+black
+isort
+pylint
