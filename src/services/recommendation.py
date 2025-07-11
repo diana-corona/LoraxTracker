@@ -59,7 +59,7 @@ class RecommendationEngine:
         
         return Recommendation(
             user_id=self.user_id,
-            phase_type=current_phase.functional_phase.value,  # Use functional phase as primary
+            phase_type=current_phase.functional_phase.value,
             date=date.today(),
             recommendations=personalized_recommendations,
             is_implemented=False
@@ -145,13 +145,13 @@ class RecommendationEngine:
         priority = recommendation.priority
         
         # Base adjustments for pain/energy
-        if recommendation.category == "ejercicio":
+        if recommendation.category == "exercise":
             if avg_pain and avg_pain > 3:
                 priority = max(1, priority - 1)
             if avg_energy and avg_energy < 3:
                 priority = max(1, priority - 1)
         
-        if recommendation.category == "descanso":
+        if recommendation.category == "rest":
             if avg_pain and avg_pain > 3:
                 priority = min(5, priority + 1)
             if avg_energy and avg_energy < 3:
@@ -159,19 +159,19 @@ class RecommendationEngine:
         
         # Phase-specific adjustments
         if functional_phase == FunctionalPhaseType.POWER:
-            if recommendation.category == "nutricion":
+            if recommendation.category == "nutrition":
                 priority = min(5, priority + 1)  # Higher priority for nutrition during Power phase
-            if "ayuno" in recommendation.description.lower():
+            if "fasting" in recommendation.description.lower():
                 priority = min(5, priority + 1)  # Higher priority for fasting recommendations
                 
         elif functional_phase == FunctionalPhaseType.MANIFESTATION:
-            if recommendation.category == "actividad":
+            if recommendation.category == "activity":
                 priority = min(5, priority + 1)  # Higher priority for activities
                 
         elif functional_phase == FunctionalPhaseType.NURTURE:
-            if recommendation.category == "descanso":
+            if recommendation.category == "rest":
                 priority = min(5, priority + 1)  # Higher priority for rest
-            if "ayuno" in recommendation.description.lower():
+            if "fasting" in recommendation.description.lower():
                 priority = max(1, priority - 2)  # Lower priority for fasting
         
         return priority
@@ -189,18 +189,18 @@ class RecommendationEngine:
         if avg_pain and avg_pain > 3:
             additional.append(
                 RecommendationType(
-                    category="descanso",
+                    category="rest",
                     priority=5,
-                    description="Considerar técnicas de manejo del dolor y descanso adicional"
+                    description="Consider pain management techniques and additional rest"
                 )
             )
         
         if avg_energy and avg_energy < 3:
             additional.append(
                 RecommendationType(
-                    category="nutricion",
+                    category="nutrition",
                     priority=4,
-                    description="Enfocarse en alimentos energéticos y suplementos"
+                    description="Focus on energy-rich foods and supplements"
                 )
             )
         
@@ -209,18 +209,18 @@ class RecommendationEngine:
             if avg_energy and avg_energy > 3:
                 additional.append(
                     RecommendationType(
-                        category="nutricion",
+                        category="nutrition",
                         priority=4,
-                        description="Aprovechar los niveles de energía para el ayuno"
+                        description="Take advantage of high energy levels for fasting"
                     )
                 )
                 
         elif functional_phase == FunctionalPhaseType.NURTURE:
             additional.append(
                 RecommendationType(
-                    category="emocional",
+                    category="emotional",
                     priority=4,
-                    description="Practicar técnicas de autocuidado y conexión emocional"
+                    description="Practice self-care and emotional connection techniques"
                 )
             )
         

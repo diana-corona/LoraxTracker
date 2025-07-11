@@ -10,10 +10,10 @@ class TraditionalPhaseType(str, Enum):
     """
     Traditional menstrual cycle phases.
     """
-    MENSTRUATION = "menstruacion"
-    FOLLICULAR = "folicular"
-    OVULATION = "ovulacion"
-    LUTEAL = "lutea"
+    MENSTRUATION = "menstruation"
+    FOLLICULAR = "follicular"
+    OVULATION = "ovulation"
+    LUTEAL = "luteal"
 
 class FunctionalPhaseType(str, Enum):
     """

@@ -11,7 +11,7 @@ class CycleEvent(BaseModel):
     """
     user_id: str
     date: date
-    state: str = Field(..., pattern="^(menstruacion|folicular|ovulacion|lutea)$")
+    state: str = Field(..., pattern="^(menstruation|follicular|ovulation|luteal)$")
     pain_level: Optional[int] = Field(None, ge=0, le=5)
     energy_level: Optional[int] = Field(None, ge=0, le=5)
     notes: Optional[str] = None

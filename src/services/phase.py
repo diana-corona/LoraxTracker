@@ -188,68 +188,68 @@ def get_phase_details(traditional_phase: TraditionalPhaseType, cycle_day: int) -
     # Functional phase details based on Dr. Mindy Pelz's recommendations
     functional_details = {
         FunctionalPhaseType.POWER: {
-            "dietary_style": "Ketobiótico",
-            "fasting_protocol": "13 a 72 horas según tolerancia (16:8, 24h, OMAD)",
+            "dietary_style": "Ketobiotic",
+            "fasting_protocol": "13 to 72 hours as tolerated (16:8, 24h, OMAD)",
             "food_recommendations": [
-                "Grasas saludables: aguacate, aceite de oliva, aceite de coco, ghee",
-                "Proteínas limpias: pescado, huevo, tofu, pollo orgánico",
-                "Crucíferas: brócoli, coles de Bruselas, col rizada, kale",
-                "Prebióticos: ajo, cebolla, puerro, raíz de diente de león",
-                "Semillas: linaza, chía, calabaza, girasol, ajonjolí",
-                "Probióticos naturales: kimchi, chucrut, yogur, kéfir",
-                "Estrógeno-builders: espinaca, germinados, arándanos, fresas"
+                "Healthy fats: avocado, olive oil, coconut oil, ghee",
+                "Clean proteins: fish, eggs, tofu, organic chicken",
+                "Cruciferous vegetables: broccoli, Brussels sprouts, kale",
+                "Prebiotics: garlic, onion, leek, dandelion root",
+                "Seeds: flax, chia, pumpkin, sunflower, sesame",
+                "Natural probiotics: kimchi, sauerkraut, yogurt, kefir",
+                "Estrogen builders: spinach, sprouts, blueberries, strawberries"
             ],
             "activity_recommendations": [
-                "Ejercicio de baja intensidad",
-                "Yoga suave",
-                "Caminatas",
-                "Descanso según necesidad",
-                "Meditación y prácticas de relajación"
+                "Low intensity exercise",
+                "Gentle yoga",
+                "Walking",
+                "Rest as needed",
+                "Meditation and relaxation practices"
             ]
         },
         FunctionalPhaseType.MANIFESTATION: {
-            "dietary_style": "Transición entre ketobiótico y hormone feasting",
-            "fasting_protocol": "No más de 15 horas, evitar ayunos largos",
+            "dietary_style": "Transition from ketobiotic to hormone feasting",
+            "fasting_protocol": "No more than 15 hours, avoid extended fasts",
             "food_recommendations": [
-                "Vegetales de raíz: remolacha, zanahoria, nabo, hinojo",
-                "Frutas frescas: toronja, bayas, piña, mango, papaya",
-                "Crucíferas: coliflor, kale, brócoli",
-                "Alimentos desintoxicantes: pepinillos fermentados, limón",
-                "Polifenoles: aceitunas, cebolla morada, chocolate amargo",
-                "Apoyo intestinal: alimentos fermentados, fibra prebiótica",
-                "Semillas y nueces suaves: almendras, anacardos, nueces"
+                "Root vegetables: beets, carrots, turnips, fennel",
+                "Fresh fruits: grapefruit, berries, pineapple, mango, papaya",
+                "Cruciferous vegetables: cauliflower, kale, broccoli",
+                "Detox foods: fermented pickles, lemon, parsley",
+                "Polyphenols: olives, red onion, dark chocolate",
+                "Gut support: fermented foods, prebiotic fiber",
+                "Soft nuts and seeds: almonds, cashews, Brazil nuts"
             ],
             "activity_recommendations": [
-                "Ejercicio de intensidad moderada a alta",
-                "Actividades sociales",
-                "Proyectos creativos",
-                "Toma de decisiones importantes",
-                "Networking y comunicación"
+                "Moderate to high intensity exercise",
+                "Social activities",
+                "Creative projects",
+                "Important decision making",
+                "Networking and communication"
             ]
         },
         FunctionalPhaseType.NURTURE: {
-            "dietary_style": "Hormone Feasting extendido",
-            "fasting_protocol": "Evitar el ayuno, comidas frecuentes y cálidas",
+            "dietary_style": "Extended hormone feasting",
+            "fasting_protocol": "Avoid fasting, frequent warm meals with complex carbs",
             "food_recommendations": [
-                "Tubérculos: camote, yuca, papa roja, calabaza butternut",
-                "Carbohidratos complejos: avena, arroz integral, quinoa",
-                "Magnesio y B6: plátano, semillas de girasol, chocolate",
-                "Frutas reconfortantes: dátiles, higos, manzana cocida",
-                "Tés calmantes: manzanilla, jengibre, hinojo",
-                "Proteínas suaves: caldo de pollo, pavo, sopas"
+                "Root vegetables: sweet potato, yuca, red potato, butternut squash",
+                "Complex carbs: oats, brown rice, quinoa",
+                "Magnesium & B6: banana, sunflower seeds, dark chocolate",
+                "Comfort fruits: dates, figs, cooked apple",
+                "Calming teas: chamomile, ginger root, fennel",
+                "Gentle proteins: chicken broth, turkey, soups"
             ],
             "activity_recommendations": [
-                "Ejercicio suave y restaurativo",
-                "Actividades relajantes",
-                "Autocuidado y descanso",
-                "Prácticas de relajación",
-                "Tiempo en la naturaleza"
+                "Gentle restorative exercise",
+                "Relaxing activities",
+                "Self-care and rest",
+                "Relaxation practices",
+                "Time in nature"
             ],
             "supplement_recommendations": [
-                "Magnesio",
-                "Vitamina B6",
+                "Magnesium",
+                "Vitamin B6",
                 "Omega-3",
-                "Probióticos"
+                "Probiotics"
             ]
         }
     }
@@ -293,14 +293,14 @@ def get_phase_specific_recommendations(
     # Dietary recommendations
     recommendations.extend([
         RecommendationType(
-            category="nutricion",
+            category="nutrition",
             priority=5,
-            description=f"Estilo alimenticio: {phase_details['dietary_style']}"
+            description=f"Dietary style: {phase_details['dietary_style']}"
         ),
         RecommendationType(
-            category="nutricion",
+            category="nutrition",
             priority=4,
-            description=f"Protocolo de ayuno: {phase_details['fasting_protocol']}"
+            description=f"Fasting protocol: {phase_details['fasting_protocol']}"
         )
     ])
     
@@ -308,7 +308,7 @@ def get_phase_specific_recommendations(
     for food_rec in phase_details['food_recommendations']:
         recommendations.append(
             RecommendationType(
-                category="nutricion",
+                category="nutrition",
                 priority=4,
                 description=food_rec
             )
@@ -318,7 +318,7 @@ def get_phase_specific_recommendations(
     for activity_rec in phase_details['activity_recommendations']:
         recommendations.append(
             RecommendationType(
-                category="actividad",
+                category="activity",
                 priority=3,
                 description=activity_rec
             )
@@ -329,9 +329,9 @@ def get_phase_specific_recommendations(
         for supp_rec in phase_details['supplement_recommendations']:
             recommendations.append(
                 RecommendationType(
-                    category="suplementos",
+                    category="supplements",
                     priority=3,
-                    description=f"Considerar suplementación con {supp_rec}"
+                    description=f"Consider supplementing with {supp_rec}"
                 )
             )
     
@@ -349,31 +349,31 @@ def generate_phase_report(phase: Phase, events: List[CycleEvent]) -> str:
         Formatted report string
     """
     report = [
-        "🌙 Reporte de Fase",
-        f"Fase Tradicional: {phase.traditional_phase.value.title()}",
-        f"Fase Funcional: {phase.functional_phase.value.title()}",
-        f"Duración: {phase.duration} días ({phase.start_date} a {phase.end_date})",
+        "🌙 Phase Report",
+        f"Traditional Phase: {phase.traditional_phase.value.title()}",
+        f"Functional Phase: {phase.functional_phase.value.title()}",
+        f"Duration: {phase.duration} days ({phase.start_date} to {phase.end_date})",
         "",
-        "🩺 Síntomas Comunes:",
+        "🩺 Common Symptoms:",
         *[f"• {symptom}" for symptom in phase.typical_symptoms],
         "",
-        "🍽️ Estilo Alimenticio:",
+        "🍽️ Dietary Style:",
         f"• {phase.dietary_style}",
         "",
-        "⏱️ Protocolo de Ayuno:",
+        "⏱️ Fasting Protocol:",
         f"• {phase.fasting_protocol}",
         "",
-        "🥗 Alimentos Recomendados:",
+        "🥗 Recommended Foods:",
         *[f"• {food}" for food in phase.food_recommendations],
         "",
-        "💪 Actividades Recomendadas:",
+        "💪 Recommended Activities:",
         *[f"• {activity}" for activity in phase.activity_recommendations],
     ]
     
     if phase.supplement_recommendations:
         report.extend([
             "",
-            "💊 Suplementos a Considerar:",
+            "💊 Supplements to Consider:",
             *[f"• {supplement}" for supplement in phase.supplement_recommendations]
         ])
     
@@ -382,7 +382,7 @@ def generate_phase_report(phase: Phase, events: List[CycleEvent]) -> str:
         if recent_events:
             report.extend([
                 "",
-                "📝 Notas Recientes:",
+                "📝 Recent Notes:",
                 *[f"• {event.date}: {event.notes}" for event in recent_events]
             ])
     
