@@ -24,7 +24,7 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
 
     # Get most recent menstruation event
     menstruation_events = sorted(
-        [e for e in events if e.state == TraditionalPhaseType.MENSTRUATION.value],
+        [e for e in events if e.state == "menstruation"],
         key=lambda x: x.date,
         reverse=True
     )

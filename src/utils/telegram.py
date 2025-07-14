@@ -5,18 +5,16 @@ import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
-
-from telegram import Update, Bot
-from telegram.ext import Application, ContextTypes
+import requests
 
 class TelegramClient:
     """Client for interacting with Telegram Bot API."""
     
     def __init__(self):
         self.token = os.environ["TELEGRAM_BOT_TOKEN"]
-        self.bot = Bot(token=self.token)
+        self.base_url = f"https://api.telegram.org/bot{self.token}"
     
-    async def send_message(
+    def send_message(
         self,
         chat_id: str,
         text: str,
@@ -33,14 +31,27 @@ class TelegramClient:
         Returns:
             Response from Telegram API
         """
-        return await self.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode="HTML"
+        data = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
+            
+        response = requests.post(
+            f"{self.base_url}/sendMessage",
+            json=data
         )
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({"ok": True, "result": response.json()})
+        }
     
-    async def send_phase_report(
+    def send_phase_report(
         self,
         chat_id: str,
         phase_report: str
@@ -55,12 +66,12 @@ class TelegramClient:
         Returns:
             Response from Telegram API
         """
-        return await self.send_message(
+        return self.send_message(
             chat_id=chat_id,
             text=f"<pre>{phase_report}</pre>"
         )
     
-    async def send_recommendation(
+    def send_recommendation(
         self,
         chat_id: str,
         recommendations: List[Dict[str, Any]]
@@ -85,7 +96,7 @@ class TelegramClient:
                 f"{rec['description']}\n"
             )
         
-        return await self.send_message(
+        return self.send_message(
             chat_id=chat_id,
             text="\n".join(message)
         )

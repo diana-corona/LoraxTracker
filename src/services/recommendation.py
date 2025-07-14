@@ -33,7 +33,7 @@ class RecommendationEngine:
         """
         # Calculate current cycle day
         menstruation_events = sorted(
-            [e for e in historical_events if e.state == TraditionalPhaseType.MENSTRUATION.value],
+            [e for e in historical_events if e.state == "menstruation"],
             key=lambda x: x.date,
             reverse=True
         )

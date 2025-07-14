@@ -6,7 +6,8 @@ from datetime import date, timedelta
 from statistics import mean, stdev
 
 from src.models.event import CycleEvent
-from src.models.phase import PhaseType, Phase
+from src.models.phase import TraditionalPhaseType, FunctionalPhaseType, Phase
+from src.services.phase import get_phase_details, map_to_functional_phase
 
 def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[str]]:
     """
@@ -26,7 +27,7 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
         
     # Filter menstruation events and sort by date
     menstruation_events = sorted(
-        [e for e in events if e.state == PhaseType.MENSTRUATION],
+        [e for e in events if e.state == "menstruation"],
         key=lambda x: x.date
     )
     
@@ -81,7 +82,7 @@ def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = 
         raise ValueError("No events found before target date")
     
     last_menstruation = next(
-        (e for e in recent_events if e.state == PhaseType.MENSTRUATION),
+        (e for e in recent_events if e.state == "menstruation"),
         None
     )
     
@@ -92,53 +93,62 @@ def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = 
     
     # Determine phase based on typical cycle lengths
     if days_since < 5:
-        phase_type = PhaseType.MENSTRUATION
+        phase_type = TraditionalPhaseType.MENSTRUATION
         duration = 5
     elif days_since < 14:
-        phase_type = PhaseType.FOLLICULAR
+        phase_type = TraditionalPhaseType.FOLLICULAR
         duration = 9
     elif days_since < 17:
-        phase_type = PhaseType.OVULATION
+        phase_type = TraditionalPhaseType.OVULATION
         duration = 3
     else:
-        phase_type = PhaseType.LUTEAL
+        phase_type = TraditionalPhaseType.LUTEAL
         duration = 11
     
     start_date = target_date - timedelta(days=days_since % duration)
     end_date = start_date + timedelta(days=duration)
     
+    # Get phase details from phase service
+    phase_details = get_phase_details(phase_type, days_since + 1)
+    functional_phase = map_to_functional_phase(phase_type, days_since + 1)
+
     return Phase(
-        phase_type=phase_type,
+        traditional_phase=phase_type,
+        functional_phase=functional_phase,
         start_date=start_date,
         end_date=end_date,
         duration=duration,
-        typical_symptoms=get_typical_symptoms(phase_type),
-        recommendations=get_phase_recommendations(phase_type),
+        typical_symptoms=phase_details["traditional_symptoms"],
+        dietary_style=phase_details["dietary_style"],
+        fasting_protocol=phase_details["fasting_protocol"],
+        food_recommendations=phase_details["food_recommendations"],
+        activity_recommendations=phase_details["activity_recommendations"],
+        supplement_recommendations=phase_details.get("supplement_recommendations"),
         user_notes=None
     )
 
-def get_typical_symptoms(phase_type: PhaseType) -> List[str]:
+def get_typical_symptoms(phase_type: TraditionalPhaseType) -> List[str]:
     """Get typical symptoms for a given phase."""
     symptoms = {
-        PhaseType.MENSTRUATION: [
+        TraditionalPhaseType.MENSTRUATION: [
             "Cramping",
             "Fatigue",
             "Lower back pain",
             "Headaches"
         ],
-        PhaseType.FOLLICULAR: [
+        TraditionalPhaseType.FOLLICULAR: [
             "Increased energy",
             "Better mood",
             "Higher cognitive function",
             "Increased motivation"
         ],
-        PhaseType.OVULATION: [
+        TraditionalPhaseType.OVULATION: [
             "Mild pelvic pain",
             "Increased libido",
             "Breast tenderness",
             "Increased energy levels"
         ],
-        PhaseType.LUTEAL: [
+        TraditionalPhaseType.LUTEAL: [
             "Mood changes",
             "Breast tenderness",
             "Fatigue",
@@ -147,28 +157,28 @@ def get_typical_symptoms(phase_type: PhaseType) -> List[str]:
     }
     return symptoms[phase_type]
 
-def get_phase_recommendations(phase_type: PhaseType) -> List[str]:
+def get_phase_recommendations(phase_type: TraditionalPhaseType) -> List[str]:
     """Get general recommendations for a given phase."""
     recommendations = {
-        PhaseType.MENSTRUATION: [
+        TraditionalPhaseType.MENSTRUATION: [
             "Rest and self-care",
             "Light exercise like walking or yoga",
             "Iron-rich foods",
             "Warm compress for cramps"
         ],
-        PhaseType.FOLLICULAR: [
+        TraditionalPhaseType.FOLLICULAR: [
             "High-intensity workouts",
             "Start new projects",
             "Social activities",
             "Learning new skills"
         ],
-        PhaseType.OVULATION: [
+        TraditionalPhaseType.OVULATION: [
             "Challenging workouts",
             "Important presentations/meetings",
             "Social events",
             "Creative activities"
         ],
-        PhaseType.LUTEAL: [
+        TraditionalPhaseType.LUTEAL: [
             "Moderate exercise",
             "Organizational tasks",
             "Meal planning",
