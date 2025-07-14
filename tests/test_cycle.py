@@ -56,24 +56,24 @@ def test_phase_recommendations():
     
     # Test Power Phase recommendations
     phase = get_current_phase(events, date(2024, 1, 3))
-    assert phase.dietary_style == "Ketobiótico"
-    assert "13 a 72 horas" in phase.fasting_protocol
-    assert any("Grasas saludables" in rec for rec in phase.food_recommendations)
-    assert any("Proteínas limpias" in rec for rec in phase.food_recommendations)
+    assert phase.dietary_style == "Ketobiotic"
+    assert "13 to 72 hours" in phase.fasting_protocol
+    assert any("Healthy fats" in rec for rec in phase.food_recommendations)
+    assert any("Clean proteins" in rec for rec in phase.food_recommendations)
     
     # Test Manifestation Phase recommendations
     phase = get_current_phase(events, date(2024, 1, 13))
-    assert "Transición" in phase.dietary_style
-    assert "No más de 15 horas" in phase.fasting_protocol
-    assert any("Vegetales de raíz" in rec for rec in phase.food_recommendations)
+    assert "Transition" in phase.dietary_style
+    assert "No more than 15 hours" in phase.fasting_protocol
+    assert any("Root vegetables" in rec for rec in phase.food_recommendations)
     
     # Test Nurture Phase recommendations
     phase = get_current_phase(events, date(2024, 1, 25))
-    assert "Hormone Feasting" in phase.dietary_style
-    assert "Evitar el ayuno" in phase.fasting_protocol
-    assert any("Tubérculos" in rec for rec in phase.food_recommendations)
+    assert "hormone feasting" in phase.dietary_style.lower()
+    assert "Avoid fasting" in phase.fasting_protocol
+    assert any("Root vegetables" in rec for rec in phase.food_recommendations)
     assert phase.supplement_recommendations is not None
-    assert any("Magnesio" in supp for supp in phase.supplement_recommendations)
+    assert any("Magnesium" in supp for supp in phase.supplement_recommendations)
 
 def test_phase_mapping():
     """Test mapping between traditional and functional phases."""
@@ -130,10 +130,10 @@ def test_report_generation():
     from src.services.phase import generate_phase_report
     report = generate_phase_report(phase, events)
     
-    assert "Fase Tradicional: Menstruacion" in report
-    assert "Fase Funcional: Power" in report
-    assert "🍽️ Estilo Alimenticio" in report
+    assert "Traditional Phase: Menstruation" in report
+    assert "Functional Phase: Power" in report
+    assert "🍽️ Dietary Style" in report
     assert phase.dietary_style in report
-    assert "⏱️ Protocolo de Ayuno" in report
+    assert "⏱️ Fasting Protocol" in report
     assert phase.fasting_protocol in report
     assert "Started period" in report

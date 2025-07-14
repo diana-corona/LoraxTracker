@@ -50,10 +50,10 @@ lorax-tracker/
 │   ├── handlers/          
 │   │   ├── __init__.py
 │   │   ├── telegram.py    # Main bot handler
-│   │   ├── registrar.py   # User registration
-│   │   ├── prediccion.py  # Cycle predictions
-│   │   ├── fase.py       # Phase analysis
-│   │   └── lista_semanal.py  # Weekly reports
+│   │   ├── register.py    # User registration
+│   │   ├── prediction.py  # Cycle predictions
+│   │   ├── phase.py       # Phase analysis
+│   │   └── weekly_report.py  # Weekly reports
 │   └── utils/             
 │       ├── __init__.py
 │       ├── dynamo.py      # DynamoDB client
@@ -74,10 +74,10 @@ from typing import Optional
 from pydantic import BaseModel
 
 class TraditionalPhaseType(str, Enum):
-    MENSTRUATION = "menstruacion"
-    FOLLICULAR = "folicular"
-    OVULATION = "ovulacion"
-    LUTEAL = "lutea"
+    MENSTRUATION = "menstruation"
+    FOLLICULAR = "follicular"
+    OVULATION = "ovulation"
+    LUTEAL = "luteal"
 
 class FunctionalPhaseType(str, Enum):
     POWER = "power"           # Days 1-10 & 16-19
@@ -105,9 +105,9 @@ async def handler(event: Dict, context: LambdaContext) -> Dict:
     """
     Handle Telegram webhook requests:
     - /start - Initialize bot
-    - /registrar YYYY-MM-DD - Register cycle event
-    - /fase - Get current phase info
-    - /prediccion - Get cycle predictions
+    - /register YYYY-MM-DD - Register cycle event
+    - /phase - Get current phase info
+    - /predict - Get cycle predictions
     """
 ```
 

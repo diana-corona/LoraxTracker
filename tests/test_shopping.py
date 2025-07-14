@@ -17,8 +17,8 @@ def power_phase() -> Phase:
         end_date=date(2024, 1, 5),
         duration=5,
         typical_symptoms=["test symptom"],
-        dietary_style="Ketobiótico",
-        fasting_protocol="13-72 horas",
+        dietary_style="Ketobiotic",
+        fasting_protocol="13-72 hours",
         food_recommendations=["test food"],
         activity_recommendations=["test activity"]
     )
@@ -28,49 +28,49 @@ def test_shopping_list_generation(power_phase: Phase):
     shopping_list = ShoppingListGenerator.generate_weekly_list(power_phase)
     
     # Verify all categories are present
-    assert "proteinas" in shopping_list
-    assert "vegetales" in shopping_list
-    assert "frutas" in shopping_list
-    assert "grasas" in shopping_list
-    assert "carbohidratos" in shopping_list
-    assert "suplementos" in shopping_list
-    assert "otros" in shopping_list
+    assert "proteins" in shopping_list
+    assert "vegetables" in shopping_list
+    assert "fruits" in shopping_list
+    assert "fats" in shopping_list
+    assert "carbohydrates" in shopping_list
+    assert "supplements" in shopping_list
+    assert "others" in shopping_list
     
     # Verify specific Power phase items
-    assert "aguacate" in shopping_list["grasas"]
-    assert "brócoli" in shopping_list["vegetales"]
-    assert "huevos" in shopping_list["proteinas"]
-    assert "kimchi" in shopping_list["otros"]
+    assert "avocado" in shopping_list["fats"]
+    assert "broccoli" in shopping_list["vegetables"]
+    assert "eggs" in shopping_list["proteins"]
+    assert "kimchi" in shopping_list["others"]
 
 def test_power_phase_ingredients():
     """Test Power phase specific ingredients."""
     items = ShoppingListGenerator._get_phase_ingredients(FunctionalPhaseType.POWER)
     
     # Verify ketogenic focus
-    assert "aceite de coco" in items["grasas"]
-    assert "pescado" in items["proteinas"]
-    assert all(veg in items["vegetales"] for veg in ["brócoli", "col rizada", "espinaca"])
-    assert "kéfir" in items["otros"]
+    assert "coconut oil" in items["fats"]
+    assert "fish" in items["proteins"]
+    assert all(veg in items["vegetables"] for veg in ["broccoli", "kale", "spinach"])
+    assert "kefir" in items["others"]
 
 def test_manifestation_phase_ingredients():
     """Test Manifestation phase specific ingredients."""
     items = ShoppingListGenerator._get_phase_ingredients(FunctionalPhaseType.MANIFESTATION)
     
     # Verify transition foods
-    assert "remolacha" in items["vegetales"]
-    assert "toronja" in items["frutas"]
-    assert "almendras" in items["otros"]
+    assert "beetroot" in items["vegetables"]
+    assert "grapefruit" in items["fruits"]
+    assert "almonds" in items["others"]
 
 def test_nurture_phase_ingredients():
     """Test Nurture phase specific ingredients."""
     items = ShoppingListGenerator._get_phase_ingredients(FunctionalPhaseType.NURTURE)
     
     # Verify complex carbs and comfort foods
-    assert "quinoa" in items["carbohidratos"]
-    assert "dátiles" in items["frutas"]
-    assert "magnesio" in items["suplementos"]
-    assert "jengibre" in items["otros"]
-    assert "pavo" in items["proteinas"]
+    assert "quinoa" in items["carbohydrates"]
+    assert "dates" in items["fruits"]
+    assert "magnesium" in items["supplements"]
+    assert "ginger" in items["others"]
+    assert "turkey" in items["proteins"]
 
 def test_weekly_list_combination():
     """Test shopping list combining multiple phases."""
@@ -82,7 +82,7 @@ def test_weekly_list_combination():
         duration=5,
         typical_symptoms=["test symptom"],
         dietary_style="Hormone Feasting",
-        fasting_protocol="No ayuno",
+        fasting_protocol="No fasting",
         food_recommendations=["test food"],
         activity_recommendations=["test activity"]
     )
@@ -90,25 +90,25 @@ def test_weekly_list_combination():
     shopping_list = ShoppingListGenerator.generate_weekly_list(phase)
     
     # Should include items from multiple phases due to week-long prediction
-    assert any("aguacate" in item for item in shopping_list["grasas"])  # Power phase
-    assert any("remolacha" in item for item in shopping_list["vegetales"])  # Manifestation
-    assert any("quinoa" in item for item in shopping_list["carbohidratos"])  # Nurture
+    assert any("avocado" in item for item in shopping_list["fats"])  # Power phase
+    assert any("beetroot" in item for item in shopping_list["vegetables"])  # Manifestation
+    assert any("quinoa" in item for item in shopping_list["carbohydrates"])  # Nurture
 
 def test_shopping_list_formatting():
     """Test shopping list string formatting."""
     items = {
-        "proteinas": ["huevos", "pescado"],
-        "vegetales": ["brócoli"],
-        "frutas": [],  # Empty category
-        "otros": ["té"]
+        "proteins": ["eggs", "fish"],
+        "vegetables": ["broccoli"],
+        "fruits": [],  # Empty category
+        "others": ["tea"]
     }
     
     formatted = ShoppingListGenerator.generate_shopping_list(items)
     
     # Check formatting
-    assert "🛒 Lista de Compras" in formatted
-    assert "🥩 Proteinas:" in formatted
-    assert "  • huevos" in formatted
-    assert "🥬 Vegetales:" in formatted
-    assert "Frutas" not in formatted  # Empty category should be omitted
-    assert "🧂 Otros:" in formatted
+    assert "🛒 Shopping List" in formatted
+    assert "🥩 Proteins:" in formatted
+    assert "  • eggs" in formatted
+    assert "🥬 Vegetables:" in formatted
+    assert "Fruits" not in formatted  # Empty category should be omitted
+    assert "🧂 Others:" in formatted

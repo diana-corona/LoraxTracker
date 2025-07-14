@@ -39,10 +39,10 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
     if days_since < 5:
         traditional_phase = TraditionalPhaseType.MENSTRUATION
         duration = 5
-    elif days_since < 14:
+    elif days_since < 12:
         traditional_phase = TraditionalPhaseType.FOLLICULAR
-        duration = 9
-    elif days_since < 17:
+        duration = 7
+    elif days_since < 15:
         traditional_phase = TraditionalPhaseType.OVULATION
         duration = 3
     else:
@@ -261,13 +261,12 @@ def get_phase_details(traditional_phase: TraditionalPhaseType, cycle_day: int) -
 
 def map_to_functional_phase(phase: TraditionalPhaseType, cycle_day: int) -> FunctionalPhaseType:
     """Map traditional phase to functional phase based on Dr. Mindy Pelz's approach."""
-    if phase in [TraditionalPhaseType.MENSTRUATION, TraditionalPhaseType.FOLLICULAR] and cycle_day <= 10:
+    if cycle_day <= 10:
         return FunctionalPhaseType.POWER
-    elif phase == TraditionalPhaseType.OVULATION or (cycle_day >= 11 and cycle_day <= 15):
+    elif cycle_day >= 11 and cycle_day <= 15:
         return FunctionalPhaseType.MANIFESTATION
-    elif cycle_day >= 16:
-        # Early luteal is also Power phase
-        return FunctionalPhaseType.POWER if cycle_day <= 19 else FunctionalPhaseType.NURTURE
+    elif cycle_day >= 16 and cycle_day <= 19:
+        return FunctionalPhaseType.POWER
     else:
         return FunctionalPhaseType.NURTURE
 

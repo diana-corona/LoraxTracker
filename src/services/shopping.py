@@ -30,13 +30,13 @@ class ShoppingListGenerator:
         
         # Collect unique ingredients needed for all phases
         ingredients: Dict[str, Set[str]] = {
-            "proteinas": set(),
-            "vegetales": set(),
-            "frutas": set(),
-            "grasas": set(),
-            "carbohidratos": set(),
-            "suplementos": set(),
-            "otros": set()
+            "proteins": set(),
+            "vegetables": set(),
+            "fruits": set(),
+            "fats": set(),
+            "carbohydrates": set(),
+            "supplements": set(),
+            "others": set()
         }
         
         for phase in phases:
@@ -54,126 +54,161 @@ class ShoppingListGenerator:
     def _get_phase_ingredients(phase_type: FunctionalPhaseType) -> Dict[str, Set[str]]:
         """Get recommended ingredients for a specific phase."""
         base_ingredients = {
-            "proteinas": set(),
-            "vegetales": set(),
-            "frutas": set(),
-            "grasas": set(),
-            "carbohidratos": set(),
-            "suplementos": set(),
-            "otros": set()
+            "proteins": set(),
+            "vegetables": set(),
+            "fruits": set(),
+            "fats": set(),
+            "carbohydrates": set(),
+            "supplements": set(),
+            "others": set()
         }
         
         if phase_type == FunctionalPhaseType.POWER:
             base_ingredients.update({
-                "grasas": {
-                    "aguacate",
-                    "aceite de oliva",
-                    "aceite de coco",
-                    "ghee (mantequilla clarificada)",
-                    "nueces variadas"
+                "fats": {
+                    "avocado",
+                    "olive oil",
+                    "coconut oil",
+                    "ghee (clarified butter)",
+                    "mixed nuts"
                 },
-                "proteinas": {
-                    "pescado",
-                    "huevos",
+                "proteins": {
+                    "fish",
+                    "eggs",
                     "tofu",
-                    "pollo orgánico"
+                    "organic chicken"
                 },
-                "vegetales": {
-                    "brócoli",
-                    "coles de Bruselas",
-                    "col rizada",
+                "vegetables": {
+                    "broccoli",
+                    "brussels sprouts",
+                    "curly cabbage",
                     "kale",
                     "bok choy",
-                    "ajo",
-                    "cebolla",
-                    "puerro",
-                    "raíz de diente de león",
-                    "alcachofa",
-                    "espinaca",
-                    "germinados"
+                    "garlic",
+                    "onion",
+                    "leek",
+                    "dandelion root",
+                    "artichoke",
+                    "spinach",
+                    "sprouts"
                 },
-                "otros": {
+                "others": {
                     "kimchi",
-                    "chucrut",
-                    "yogur",
-                    "kéfir"
+                    "sauerkraut",
+                    "yogurt",
+                    "kefir"
                 },
-                "frutas": {
-                    "arándanos",
-                    "fresas"
+                "fruits": {
+                    "blueberries",
+                    "strawberries"
                 }
             })
             
         elif phase_type == FunctionalPhaseType.MANIFESTATION:
             base_ingredients.update({
-                "vegetales": {
-                    "remolacha",
-                    "zanahoria",
-                    "nabo",
-                    "hinojo",
-                    "coliflor",
+                "vegetables": {
+                    "beetroot",
+                    "carrot",
+                    "turnip",
+                    "fennel",
+                    "cauliflower",
                     "kale",
-                    "brócoli",
-                    "pepinillos fermentados",
-                    "perejil",
-                    "cebolla morada",
-                    "rábanos"
+                    "broccoli",
+                    "fermented pickles",
+                    "parsley",
+                    "red onion",
+                    "radishes"
                 },
-                "frutas": {
-                    "toronja",
-                    "piña",
+                "fruits": {
+                    "grapefruit",
+                    "pineapple",
                     "mango",
                     "papaya",
-                    "bayas variadas"
+                    "mixed berries"
                 },
-                "otros": {
-                    "chocolate amargo",
-                    "aceitunas",
-                    "vino tinto (opcional)",
-                    "almendras",
-                    "anacardos",
-                    "nueces de Brasil"
+                "others": {
+                    "dark chocolate",
+                    "olives",
+                    "red wine (optional)",
+                    "almonds",
+                    "cashews",
+                    "brazil nuts"
                 }
             })
             
         else:  # NURTURE
             base_ingredients.update({
-                "carbohidratos": {
-                    "camote",
-                    "yuca",
-                    "papa roja",
-                    "calabaza butternut",
-                    "betabel",
-                    "ñame",
-                    "avena",
-                    "arroz integral",
+                "carbohydrates": {
+                    "sweet potato",
+                    "cassava",
+                    "red potato",
+                    "butternut squash",
+                    "beetroot",
+                    "yam",
+                    "oats",
+                    "brown rice",
                     "quinoa",
-                    "lentejas"
+                    "lentils"
                 },
-                "frutas": {
-                    "plátano",
-                    "dátiles",
-                    "higos",
-                    "manzanas"
+                "fruits": {
+                    "banana",
+                    "dates",
+                    "figs",
+                    "apples"
                 },
-                "otros": {
-                    "semillas de girasol",
-                    "chocolate amargo",
-                    "garbanzos",
-                    "manzanilla",
-                    "jengibre",
-                    "hinojo"
+                "others": {
+                    "sunflower seeds",
+                    "dark chocolate",
+                    "chickpeas",
+                    "chamomile",
+                    "ginger",
+                    "fennel"
                 },
-                "proteinas": {
-                    "pollo para caldo",
-                    "pavo",
-                    "legumbres variadas"
+                "proteins": {
+                    "chicken for broth",
+                    "turkey",
+                    "mixed legumes"
                 },
-                "suplementos": {
-                    "magnesio",
-                    "vitamina B6",
+                "supplements": {
+                    "magnesium",
+                    "vitamin B6",
                     "omega-3"
                 }
             })
         
         return base_ingredients
+
+    @staticmethod
+    def generate_shopping_list(items: dict[str, list[str]]) -> str:
+        """
+        Format a categorized shopping list for display.
+        
+        Args:
+            items: Dictionary of categorized items
+            
+        Returns:
+            Formatted shopping list string
+        """
+        formatted_list = ["🛒 Shopping List"]
+        
+        # Category icons
+        icons = {
+            "proteins": "🥩",
+            "vegetables": "🥬",
+            "fruits": "🍎",
+            "fats": "🥑",
+            "carbohydrates": "🌾",
+            "supplements": "💊",
+            "others": "🧂"
+        }
+        
+        # Add non-empty categories
+        for category, items_list in items.items():
+            if items_list:  # Only include categories with items
+                formatted_list.extend([
+                    "",
+                    f"{icons.get(category, '•')} {category.title()}:",
+                    *[f"  • {item}" for item in sorted(items_list)]
+                ])
+        
+        return "\n".join(formatted_list)

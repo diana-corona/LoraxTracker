@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import List
 
 from src.models.event import CycleEvent
-from src.models.phase import PhaseType
+from src.models.phase import TraditionalPhaseType
 from src.models.user import User
 from src.models.recommendation import RecommendationType
 
@@ -29,7 +29,7 @@ def regular_cycle_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 1) + timedelta(days=i*28),
-            state="menstruacion"
+            state="menstruation"
         )
         for i in range(5)
     ]
@@ -41,22 +41,22 @@ def irregular_cycle_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 1),
-            state="menstruacion"
+            state="menstruation"
         ),
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 25),  # 24 days
-            state="menstruacion"
+            state="menstruation"
         ),
         CycleEvent(
             user_id="123",
             date=date(2024, 2, 25),  # 31 days
-            state="menstruacion"
+            state="menstruation"
         ),
         CycleEvent(
             user_id="123",
             date=date(2024, 3, 22),  # 26 days
-            state="menstruacion"
+            state="menstruation"
         )
     ]
 
@@ -67,7 +67,7 @@ def phase_sequence_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 1),
-            state=PhaseType.MENSTRUATION,
+            state=TraditionalPhaseType.MENSTRUATION,
             pain_level=3,
             energy_level=2,
             notes="Started menstruation"
@@ -75,7 +75,7 @@ def phase_sequence_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 5),
-            state=PhaseType.FOLLICULAR,
+            state=TraditionalPhaseType.FOLLICULAR,
             pain_level=1,
             energy_level=4,
             notes="Feeling more energetic"
@@ -83,7 +83,7 @@ def phase_sequence_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 14),
-            state=PhaseType.OVULATION,
+            state=TraditionalPhaseType.OVULATION,
             pain_level=1,
             energy_level=5,
             notes="Peak energy"
@@ -91,7 +91,7 @@ def phase_sequence_events() -> List[CycleEvent]:
         CycleEvent(
             user_id="123",
             date=date(2024, 1, 17),
-            state=PhaseType.LUTEAL,
+            state=TraditionalPhaseType.LUTEAL,
             pain_level=2,
             energy_level=3,
             notes="Starting to feel tired"
@@ -103,17 +103,17 @@ def sample_recommendations() -> List[RecommendationType]:
     """Create sample recommendations for testing."""
     return [
         RecommendationType(
-            category="ejercicio",
+            category="exercise",
             priority=3,
             description="Gentle exercises like yoga or walking"
         ),
         RecommendationType(
-            category="nutricion",
+            category="nutrition",
             priority=4,
             description="Focus on iron-rich foods"
         ),
         RecommendationType(
-            category="descanso",
+            category="rest",
             priority=5,
             description="Ensure adequate rest and sleep"
         )
@@ -127,7 +127,7 @@ def mock_dynamo_items() -> dict:
         "SK": "EVENT#2024-01-01",
         "user_id": "123",
         "date": "2024-01-01",
-        "state": "menstruacion",
+        "state": "menstruation",
         "pain_level": 3,
         "energy_level": 2,
         "notes": "Test event"

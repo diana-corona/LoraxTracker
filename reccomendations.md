@@ -1,96 +1,96 @@
-# 🌙 Recomendaciones por Fase Hormonal  
-*Basadas en Fast Like a Girl – Dra. Mindy Pelz*
+# 🌙 Hormonal Phase Recommendations
+*Based on Fast Like a Girl – Dr. Mindy Pelz*
 
-Estas recomendaciones reflejan el enfoque de ayuno cíclico y nutrición estratégica propuesto por la Dra. Mindy Pelz. Están organizadas por las tres fases funcionales del ciclo menstrual: Power, Manifestation y Nurture. Cada bloque incluye estilo de alimentación, sugerencias de ayuno y alimentos ideales para apoyar hormonas específicas.
-
----
-
-## 🔥 Power Phase  
-**Días estimados:** Día 1–10 (inicio del sangrado hasta fase folicular)  
-**También aplicable a:** Días 16–19 (inicio de la fase lútea)  
-**Estado hormonal:** Niveles bajos de estrógeno y progesterona → más resiliencia y capacidad de detoxificación
-
-**Objetivo:** Estimular mitocondrias, reparación celular, limpieza metabólica
-
-**Ayuno recomendado:**  
-- 13 a 72 horas según tolerancia  
-- Protocolos sugeridos: 16:8, 24h, OMAD, ayuno extendido solo si adaptada
-
-**Estilo alimenticio:** *Ketobiótico*  
-- Alta en grasas buenas  
-- Proteínas limpias  
-- Muy baja en carbohidratos
-
-**Alimentos destacados:**
-- **Grasas saludables:** aguacate, aceite de oliva, aceite de coco, mantequilla clarificada (ghee), nueces
-- **Proteínas limpias:** pescado, huevo, tofu, pollo orgánico
-- **Crucíferas:** brócoli, coles de Bruselas, col rizada, kale, bok choy
-- **Prebióticos:** ajo, cebolla, puerro, raíz de diente de león, alcachofa
-- **Semillas:** linaza, chía, calabaza, girasol, ajonjolí
-- **Probióticos naturales:** kimchi, chucrut, yogur, kéfir
-- **Estrógeno-builders (bases):** espinaca, germinados, arándanos, fresas, frijoles
+These recommendations reflect the cyclical fasting and strategic nutrition approach proposed by Dr. Mindy Pelz. They are organized by the three functional phases of the menstrual cycle: Power, Manifestation, and Nurture. Each block includes dietary style, fasting suggestions, and ideal foods to support specific hormones.
 
 ---
 
-## ✨ Manifestation Phase  
-**Días estimados:** Días 11–15 (alrededor de ovulación)  
-**Estado hormonal:** Pico de estrógeno y testosterona → mayor sensibilidad al estrés
+## 🔥 Power Phase
+**Estimated Days:** Day 1–10 (start of bleeding until follicular phase)
+**Also Applicable to:** Days 16–19 (start of luteal phase)
+**Hormonal State:** Low levels of estrogen and progesterone → more resilience and detoxification capacity
 
-**Objetivo:** Apoyar el metabolismo hormonal (hígado + intestino), favorecer claridad mental
+**Objective:** Stimulate mitochondria, cellular repair, metabolic cleansing
 
-**Ayuno recomendado:**  
-- No más de 15 horas  
-- Evitar ayunos largos o ayuno seco
+**Recommended Fasting:**
+- 13 to 72 hours according to tolerance
+- Suggested protocols: 16:8, 24h, OMAD, extended fasting only if adapted
 
-**Estilo alimenticio:** *Transition entre ketobiótico y hormone feasting*  
-- Aumentar ligeramente carbohidratos complejos  
-- Favorecer frutas con antioxidantes
+**Dietary Style:** *Ketobiotic*
+- High in good fats
+- Clean proteins
+- Very low in carbohydrates
 
-**Alimentos destacados:**
-- **Vegetales de raíz:** remolacha, zanahoria, nabo, hinojo  
-- **Frutas frescas:** toronja, bayas, piña, mango, papaya  
-- **Crucíferas:** coliflor, kale, brócoli  
-- **Alimentos desintoxicantes:** pepinillos fermentados, limón, perejil  
-- **Polifenoles:** aceitunas, cebolla morada, chocolate amargo, vino tinto (ocasional)  
-- **Apoyo intestinal:** alimentos fermentados, fibra prebiótica, rábanos  
-- **Semillas y nueces suaves:** almendras, anacardos, nueces de Brasil
-
----
-
-## 🌺 Nurture Phase  
-**Días estimados:** Día 20 hasta inicio del siguiente periodo  
-**Estado hormonal:** Progesterona alta → más sensibilidad física, emocional y metabólica
-
-**Objetivo:** Estabilizar azúcar en sangre, promover serotonina, reducir ansiedad e irritabilidad
-
-**Ayuno recomendado:**  
-- ❌ Evitar el ayuno  
-- Comidas frecuentes, cálidas y con carbohidratos complejos  
-- No restringir calorías
-
-**Estilo alimenticio:** *Hormone Feasting extendido*  
-- Abundante en carbohidratos complejos y alimentos ricos en magnesio, B6, triptófano
-
-**Alimentos destacados:**
-- **Tubérculos y raíces:** camote, yuca, papa roja, calabaza butternut, betabel, ñame  
-- **Carbohidratos complejos:** avena, arroz integral, quinoa, lentejas  
-- **Magnesio y B6:** plátano, semillas de girasol, chocolate amargo, garbanzos  
-- **Frutas reconfortantes:** dátiles, higos, manzana cocida  
-- **Tés calmantes:** manzanilla, raíz de jengibre, hinojo  
-- **Proteínas suaves:** caldo de pollo, pavo, sopas con legumbres
+**Featured Foods:**
+- **Healthy Fats:** avocado, olive oil, coconut oil, clarified butter (ghee), nuts
+- **Clean Proteins:** fish, eggs, tofu, organic chicken
+- **Cruciferous:** broccoli, brussels sprouts, curly cabbage, kale, bok choy
+- **Prebiotics:** garlic, onion, leek, dandelion root, artichoke
+- **Seeds:** flax, chia, pumpkin, sunflower, sesame
+- **Natural Probiotics:** kimchi, sauerkraut, yogurt, kefir
+- **Estrogen-builders (basics):** spinach, sprouts, blueberries, strawberries, beans
 
 ---
 
-## 🧩 Nota técnica para el sistema
+## ✨ Manifestation Phase
+**Estimated Days:** Days 11–15 (around ovulation)
+**Hormonal State:** Peak of estrogen and testosterone → higher stress sensitivity
 
-Este documento servirá como base de:
-- Recomendaciones diarias según fase detectada
-- Generación de listas de supermercado los sábados
-- Sugerencias personalizadas sobre ayuno
+**Objective:** Support hormone metabolism (liver + gut), promote mental clarity
 
-Cada fase puede identificarse internamente como:  
-- `"power"` → optimización mitocondrial  
-- `"manifestation"` → apoyo hepático e intestinal  
-- `"nurture"` → estabilización y reconexión emocional
+**Recommended Fasting:**
+- No more than 15 hours
+- Avoid long fasts or dry fasting
+
+**Dietary Style:** *Transition between ketobiotic and hormone feasting*
+- Slightly increase complex carbohydrates
+- Favor antioxidant-rich fruits
+
+**Featured Foods:**
+- **Root Vegetables:** beetroot, carrot, turnip, fennel
+- **Fresh Fruits:** grapefruit, berries, pineapple, mango, papaya
+- **Cruciferous:** cauliflower, kale, broccoli
+- **Detox Foods:** fermented pickles, lemon, parsley
+- **Polyphenols:** olives, red onion, dark chocolate, red wine (occasional)
+- **Gut Support:** fermented foods, prebiotic fiber, radishes
+- **Soft Seeds and Nuts:** almonds, cashews, brazil nuts
+
+---
+
+## 🌺 Nurture Phase
+**Estimated Days:** Day 20 until start of next period
+**Hormonal State:** High progesterone → more physical, emotional, and metabolic sensitivity
+
+**Objective:** Stabilize blood sugar, promote serotonin, reduce anxiety and irritability
+
+**Recommended Fasting:**
+- ❌ Avoid fasting
+- Frequent, warm meals with complex carbohydrates
+- Do not restrict calories
+
+**Dietary Style:** *Extended Hormone Feasting*
+- Abundant in complex carbohydrates and foods rich in magnesium, B6, tryptophan
+
+**Featured Foods:**
+- **Tubers and Roots:** sweet potato, cassava, red potato, butternut squash, beetroot, yam
+- **Complex Carbohydrates:** oats, brown rice, quinoa, lentils
+- **Magnesium and B6:** banana, sunflower seeds, dark chocolate, chickpeas
+- **Comforting Fruits:** dates, figs, cooked apple
+- **Calming Teas:** chamomile, ginger root, fennel
+- **Gentle Proteins:** chicken broth, turkey, legume soups
+
+---
+
+## 🧩 Technical Note for the System
+
+This document will serve as a base for:
+- Daily recommendations according to detected phase
+- Generation of grocery lists on Saturdays
+- Personalized fasting suggestions
+
+Each phase can be internally identified as:
+- `"power"` → mitochondrial optimization
+- `"manifestation"` → liver and gut support
+- `"nurture"` → stabilization and emotional reconnection
 
 ---
