@@ -1,6 +1,7 @@
 """
 Tests for Telegram utilities and handlers.
 """
+import json
 import pytest
 import os
 from datetime import datetime, timedelta
@@ -177,10 +178,10 @@ def test_validate_date_invalid():
 
 def test_send_recommendation(monkeypatch):
     """Test sending formatted recommendations."""
-    # Mock the Telegram API request
-    mock_response = Mock()
-    mock_response.json.return_value = {"ok": True}
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: mock_response)
+    # Create a mock to capture the request arguments
+    mock_post = Mock()
+    mock_post.return_value.json.return_value = {"ok": True}
+    monkeypatch.setattr("requests.post", mock_post)
     
     # Create test recommendations
     recommendations = [
@@ -211,12 +212,12 @@ def test_send_recommendation(monkeypatch):
     )
     
     # Verify API call with correctly formatted message
-    mock_response.json.assert_called_once()
+    mock_post.return_value.json.assert_called_once()
     assert result["statusCode"] == 200
     assert "ok" in json.loads(result["body"])
     
     # Verify the message format sent to Telegram API
-    requests_call_args = next(iter(mock_response.mock_calls)).args[0]
-    assert requests_call_args["text"] == expected_text
-    assert requests_call_args["chat_id"] == "test_chat"
-    assert requests_call_args["parse_mode"] == "HTML"
+    mock_post.assert_called_once()
+    assert mock_post.call_args.kwargs["json"]["text"] == expected_text
+    assert mock_post.call_args.kwargs["json"]["chat_id"] == "test_chat"
+    assert mock_post.call_args.kwargs["json"]["parse_mode"] == "HTML"
