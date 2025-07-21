@@ -2,10 +2,14 @@
 Telegram bot utility functions for message handling.
 """
 import os
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, ForwardRef, TYPE_CHECKING
 from datetime import datetime, timedelta
 import json
 import requests
+
+if TYPE_CHECKING:
+    from src.models.recommendation import RecommendationType
+    RecommendationList = List[RecommendationType]
 
 class TelegramClient:
     """Client for interacting with Telegram Bot API."""
@@ -74,26 +78,27 @@ class TelegramClient:
     def send_recommendation(
         self,
         chat_id: str,
-        recommendations: List[Dict[str, Any]]
+        recommendations: "RecommendationList"
     ) -> Dict[str, Any]:
         """
         Send formatted recommendations.
         
         Args:
             chat_id: Telegram chat ID
-            recommendations: List of recommendation objects
+            recommendations: List of RecommendationType objects containing priority, 
+                           category, and description fields
             
         Returns:
-            Response from Telegram API
+            Response from Telegram API with status code and message details
         """
         message = ["🌙 Recomendaciones personalizadas:\n"]
         
         for rec in recommendations:
-            priority_stars = "⭐" * rec["priority"]
+            priority_stars = "⭐" * rec.priority
             message.append(
                 f"{priority_stars}\n"
-                f"<b>{rec['category'].title()}</b>\n"
-                f"{rec['description']}\n"
+                f"<b>{rec.category.title()}</b>\n"
+                f"{rec.description}\n"
             )
         
         return self.send_message(

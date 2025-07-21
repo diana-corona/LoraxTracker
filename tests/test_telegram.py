@@ -7,6 +7,9 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, ANY
 from typing import List, Dict, Any
 
+import pytest
+from src.models.recommendation import RecommendationType
+
 # Set up test environment variables
 os.environ['TRACKER_TABLE_NAME'] = 'test-table'
 os.environ['TELEGRAM_BOT_TOKEN'] = 'test-token'
@@ -171,3 +174,49 @@ def test_validate_date_invalid():
     for date_str in invalid_dates:
         result = validate_date(date_str)
         assert result is None
+
+def test_send_recommendation(monkeypatch):
+    """Test sending formatted recommendations."""
+    # Mock the Telegram API request
+    mock_response = Mock()
+    mock_response.json.return_value = {"ok": True}
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: mock_response)
+    
+    # Create test recommendations
+    recommendations = [
+        RecommendationType(
+            category="exercise",
+            priority=3,
+            description="Do gentle stretching"
+        ),
+        RecommendationType(
+            category="nutrition",
+            priority=2,
+            description="Increase iron-rich foods"
+        )
+    ]
+    
+    client = TelegramClient()
+    result = client.send_recommendation("test_chat", recommendations)
+    
+    # Verify the message was formatted correctly
+    expected_text = (
+        "🌙 Recomendaciones personalizadas:\n\n"
+        "⭐⭐⭐\n"
+        "<b>Exercise</b>\n"
+        "Do gentle stretching\n\n"
+        "⭐⭐\n"
+        "<b>Nutrition</b>\n"
+        "Increase iron-rich foods\n"
+    )
+    
+    # Verify API call with correctly formatted message
+    mock_response.json.assert_called_once()
+    assert result["statusCode"] == 200
+    assert "ok" in json.loads(result["body"])
+    
+    # Verify the message format sent to Telegram API
+    requests_call_args = next(iter(mock_response.mock_calls)).args[0]
+    assert requests_call_args["text"] == expected_text
+    assert requests_call_args["chat_id"] == "test_chat"
+    assert requests_call_args["parse_mode"] == "HTML"
