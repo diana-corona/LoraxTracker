@@ -11,13 +11,17 @@ provider:
   environment:
     POWERTOOLS_SERVICE_NAME: ${self:service}
     TELEGRAM_BOT_TOKEN: ${ssm:/lorax/telegram-token}
+    ADMIN_USER_IDS: ${ssm:/lorax/admin-users}
+    STAGE: ${sls:stage}
   iam:
     role:
       statements:
         - Effect: Allow
           Action:
             - dynamodb:*
-          Resource: !GetAtt TrackerTable.Arn
+          Resource: 
+            - !GetAtt TrackerTable.Arn
+            - !GetAtt AllowListTable.Arn
         - Effect: Allow
           Action:
             - ssm:GetParameter
@@ -63,7 +67,7 @@ functions:
     timeout: 29
     memorySize: 256
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:3
+      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
   
   predict:
     handler: src.handlers.prediction.handler
@@ -74,7 +78,7 @@ functions:
     timeout: 10
     memorySize: 128
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:3
+      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
 
   phase:
     handler: src.handlers.phase.handler
@@ -85,7 +89,7 @@ functions:
     timeout: 10
     memorySize: 128
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:3
+      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
   
   register:
     handler: src.handlers.register.handler
@@ -96,7 +100,7 @@ functions:
     timeout: 10
     memorySize: 128
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:3
+      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
 
   weekly_report:
     handler: src.handlers.weekly_report.handler
@@ -107,10 +111,30 @@ functions:
     timeout: 300
     memorySize: 256
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:3
+      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
 
 resources:
   Resources:
+    AllowListTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Environment
+            Value: ${sls:stage}
+    
     TrackerTable:
       Type: AWS::DynamoDB::Table
       Properties:

@@ -11,13 +11,18 @@ from pydantic import BaseModel, Field
 
 from src.utils.dynamo import DynamoDBClient, create_pk
 from src.utils.telegram import TelegramClient, format_error_message
+from src.utils.middleware import require_auth
+from src.utils.auth import Authorization, AuthorizationError
 from src.models.user import User
 
 logger = Logger()
 tracer = Tracer()
 
-dynamo = DynamoDBClient("TrackerTable")
+import os
+
+dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
 telegram = TelegramClient()
+auth = Authorization()
 
 class RegistrationRequest(BaseModel):
     """User registration request model."""
@@ -30,6 +35,7 @@ class RegistrationRequest(BaseModel):
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
+@require_auth
 async def handler(event: Dict, context: LambdaContext) -> Dict:
     """
     Handle user registration and profile updates.
@@ -66,7 +72,17 @@ async def register_user(request: RegistrationRequest) -> Dict:
         
     Returns:
         Registration response with user details
+        
+    Raises:
+        AuthorizationError: If partner or group is not authorized
     """
+    # Verify partner access if partner_id is provided
+    if request.partner_id and not auth.verify_partner_access(request.user_id, request.partner_id):
+        raise AuthorizationError("Partner is not authorized")
+        
+    # Verify group access if chat_id_group is provided
+    if request.chat_id_group and not auth.verify_group_access(request.chat_id_group):
+        raise AuthorizationError("Group is not authorized")
     # Check if user exists
     existing_user = dynamo.get_item({
         "PK": create_pk(request.user_id),
@@ -131,6 +147,9 @@ async def link_partner(
     partner_id: str,
     chat_id: str
 ) -> Dict:
+    # Verify both users are authorized
+    if not auth.verify_partner_access(user_id, partner_id):
+        raise AuthorizationError("One or both users are not authorized")
     """
     Link two users as partners.
     

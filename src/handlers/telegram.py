@@ -16,6 +16,8 @@ from src.utils.telegram import (
     create_rating_keyboard
 )
 from src.utils.dynamo import DynamoDBClient, create_pk, create_event_sk
+from src.utils.middleware import require_auth
+from src.utils.auth import Authorization, AuthorizationError
 from src.models.event import CycleEvent
 from src.services.cycle import calculate_next_cycle
 from src.services.phase import get_current_phase, generate_phase_report
@@ -24,11 +26,28 @@ from src.services.recommendation import RecommendationEngine
 logger = Logger()
 tracer = Tracer()
 
-dynamo = DynamoDBClient("TrackerTable")
+import os
+
+dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
 telegram = TelegramClient()
+auth = Authorization()
+
+def is_admin(user_id: str) -> bool:
+    """
+    Check if user is an admin.
+    
+    Args:
+        user_id: Telegram user ID to check
+        
+    Returns:
+        bool: True if user is an admin
+    """
+    admin_ids = os.environ.get("ADMIN_USER_IDS", "").split(",")
+    return user_id in admin_ids
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
+@require_auth
 def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """
     Handle incoming Telegram webhook requests.
@@ -91,6 +110,45 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
     command, args = parse_command(text)
     
     try:
+        # Admin commands
+        if command == "/allow" and is_admin(user_id):
+            if not args or len(args) != 2 or args[1] not in ["user", "partner", "group"]:
+                return telegram.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "Usage: /allow <user_id> <type>\n"
+                        "Types: user, partner, group\n\n"
+                        "Examples:\n"
+                        "/allow 123456 user\n"
+                        "/allow 789012 partner\n"
+                        "/allow -100123456789 group"
+                    )
+                )
+            target_id, user_type = args
+            auth.add_allowed_user(target_id, user_type, user_id)
+            return telegram.send_message(
+                chat_id=chat_id,
+                text=f"✅ Added {target_id} as {user_type}"
+            )
+            
+        elif command == "/revoke" and is_admin(user_id):
+            if not args:
+                return telegram.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "Usage: /revoke <user_id>\n\n"
+                        "Example:\n"
+                        "/revoke 123456"
+                    )
+                )
+            target_id = args[0]
+            auth.remove_allowed_user(target_id)
+            return telegram.send_message(
+                chat_id=chat_id,
+                text=f"✅ Removed {target_id} from allow list"
+            )
+            
+        # Regular commands
         if command == "/start":
             return handle_start_command(user_id, chat_id)
             
@@ -220,7 +278,7 @@ def handle_register_event(
     event = CycleEvent(
         user_id=user_id,
         date=date_obj.date(),
-        state="menstruacion"  # Default to menstruation event
+        state="menstruation"  # Default to menstruation event
     )
     
     # Store in DynamoDB

@@ -2,7 +2,6 @@
 Lambda handler for generating and sending weekly reports.
 """
 from typing import Dict, List
-from datetime import date, datetime, timedelta
 import json
 
 from aws_lambda_powertools import Logger, Tracer
@@ -10,174 +9,128 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 
 from src.utils.dynamo import DynamoDBClient, create_pk
 from src.utils.telegram import TelegramClient
+from src.utils.auth import Authorization
 from src.models.event import CycleEvent
 from src.models.user import User
 from src.services.phase import get_current_phase, generate_phase_report
-from src.services.cycle import calculate_next_cycle
-from src.services.shopping import ShoppingListGenerator
 
 logger = Logger()
 tracer = Tracer()
 
-dynamo = DynamoDBClient("TrackerTable")
+import os
+
+dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
 telegram = TelegramClient()
+auth = Authorization()
+
+def get_active_users() -> List[User]:
+    """Get all active users from DynamoDB."""
+    # Scan for all users (in production, should use GSI or pagination)
+    response = dynamo.table.scan()
+    items = response.get("Items", [])
+    
+    users = []
+    for item in items:
+        if item.get("SK") == "PROFILE":
+            # Convert DynamoDB item to User object
+            try:
+                user = User(**item)
+                # Only include authorized users
+                if auth.check_user_authorized(user.user_id):
+                    users.append(user)
+            except Exception as e:
+                logger.warning(f"Failed to parse user data: {e}")
+                continue
+    
+    return users
+
+async def send_user_report(user: User) -> None:
+    """Generate and send weekly report for a user."""
+    try:
+        # Get user's events
+        events = dynamo.query_items(
+            partition_key="PK",
+            partition_value=create_pk(user.user_id)
+        )
+        
+        # Convert to CycleEvent objects
+        cycle_events = [
+            CycleEvent(**event)
+            for event in events
+            if event["SK"].startswith("EVENT#")
+        ]
+        
+        if not cycle_events:
+            logger.info(f"No events found for user {user.user_id}")
+            return
+            
+        # Get current phase
+        current_phase = get_current_phase(cycle_events)
+        
+        # Generate report
+        report = generate_phase_report(current_phase, cycle_events)
+        
+        # Add weekly summary header
+        weekly_report = [
+            "📅 Weekly Cycle Summary",
+            "------------------------",
+            *report
+        ]
+        
+        # Send to private chat
+        await telegram.send_message(
+            chat_id=user.chat_id_private,
+            text="\n".join(weekly_report)
+        )
+        
+        # Send to group if configured
+        if user.chat_id_group and auth.verify_group_access(user.chat_id_group):
+            await telegram.send_message(
+                chat_id=user.chat_id_group,
+                text="\n".join(weekly_report)
+            )
+            
+    except Exception as e:
+        logger.exception(f"Error sending report for user {user.user_id}")
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
-async def handler(event: Dict, context: LambdaContext) -> Dict:
+def handler(event: Dict, context: LambdaContext) -> Dict:
     """
-    Handle weekly report generation and notifications.
+    Handle weekly report generation.
     
     Args:
-        event: EventBridge scheduled event
+        event: CloudWatch scheduled event
         context: Lambda context
         
     Returns:
-        Response with notification status
+        Lambda response
     """
     try:
-        # Get all users
-        users = get_all_users()
+        # Get all active users
+        users = get_active_users()
+        logger.info(f"Found {len(users)} active users")
         
-        for user in users:
-            try:
-                await send_weekly_report(user)
-            except Exception as e:
-                logger.exception(f"Failed to send report for user {user.user_id}")
-                continue
+        # Send reports
+        import asyncio
+        asyncio.run(asyncio.gather(*[
+            send_user_report(user)
+            for user in users
+        ]))
         
         return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': f'Weekly reports sent to {len(users)} users'
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Weekly reports sent",
+                "user_count": len(users)
             })
         }
         
     except Exception as e:
-        logger.exception('Failed to process weekly reports')
+        logger.exception("Error generating weekly reports")
         return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": str(e)
+            })
         }
-
-def get_all_users() -> List[User]:
-    """
-    Get all registered users from DynamoDB.
-    
-    Returns:
-        List of User objects
-    """
-    # Query users by USER# prefix in PK
-    users = dynamo.query_items(
-        partition_key="PK",
-        partition_value="USER#"
-    )
-    
-    return [User(**user) for user in users]
-
-def generate_shopping_list(items: Dict[str, List[str]]) -> str:
-    """Generate formatted shopping list."""
-    sections = ["🛒 Shopping List for Next Week"]
-    
-    emoji_map = {
-        "proteins": "🥩",
-        "vegetables": "🥬",
-        "fruits": "🍎",
-        "fats": "🥑",
-        "carbs": "🥖",
-        "supplements": "💊",
-        "others": "🧂"
-    }
-    
-    for category, ingredients in items.items():
-        if ingredients:
-            emoji = emoji_map.get(category, "•")
-            sections.append(f"\n{emoji} {category.title()}:")
-            for item in ingredients:
-                sections.append(f"  • {item}")
-    
-    return "\n".join(sections)
-
-async def send_weekly_report(user: User) -> None:
-    """
-    Generate and send weekly report for a user.
-    
-    Args:
-        user: User to generate report for
-    """
-    # Get user's events
-    events = dynamo.query_items(
-        partition_key="PK",
-        partition_value=create_pk(user.user_id)
-    )
-    
-    cycle_events = [
-        CycleEvent(**event)
-        for event in events
-        if event["SK"].startswith("EVENT#")
-    ]
-    
-    if not cycle_events:
-        logger.warning(f"No events found for user {user.user_id}")
-        return
-    
-    # Generate report sections
-    sections = []
-    
-    # Current phase
-    current_phase = get_current_phase(cycle_events)
-    phase_report = generate_phase_report(current_phase, cycle_events)
-    sections.append("📅 Current Status\n" + phase_report)
-    
-    # Next cycle prediction
-    next_date, duration, warning = calculate_next_cycle(cycle_events)
-    prediction = [
-        "🔮 Next Cycle",
-        f"Expected date: {next_date}",
-        f"Average duration: {duration} days"
-    ]
-    if warning:
-        prediction.append(f"⚠️ {warning}")
-    sections.append("\n".join(prediction))
-    
-    # Recent symptoms
-    recent_events = get_recent_events(cycle_events)
-    if recent_events:
-        symptoms = ["📋 Recent Symptoms"]
-        for event in recent_events:
-            if event.pain_level or event.energy_level or event.notes:
-                symptoms.append(f"\nDate: {event.date}")
-                if event.pain_level:
-                    symptoms.append(f"Pain: {'⭐' * event.pain_level}")
-                if event.energy_level:
-                    symptoms.append(f"Energy: {'⚡' * event.energy_level}")
-                if event.notes:
-                    symptoms.append(f"Notes: {event.notes}")
-        sections.append("\n".join(symptoms))
-    
-    # Generate shopping list for next week
-    shopping_items = ShoppingListGenerator.generate_weekly_list(current_phase)
-    shopping_list = generate_shopping_list(shopping_items)
-    sections.append(shopping_list)
-    
-    # Send report to private chat
-    report = "\n\n".join(sections)
-    await telegram.send_message(
-        chat_id=user.chat_id_private,
-        text=f"📊 Weekly Report\n\n{report}"
-    )
-    
-    # Send to group chat if configured
-    if user.chat_id_group:
-        # For group chat, only send phase and prediction info
-        group_sections = sections[:2]  # Current phase and prediction only
-        group_report = "\n\n".join(group_sections)
-        await telegram.send_message(
-            chat_id=user.chat_id_group,
-            text=f"📊 Weekly Report for {user.name or 'User'}\n\n{group_report}"
-        )
-
-def get_recent_events(events: List[CycleEvent]) -> List[CycleEvent]:
-    """Get events from the past week."""
-    week_ago = date.today() - timedelta(days=7)
-    return [e for e in events if e.date >= week_ago]
