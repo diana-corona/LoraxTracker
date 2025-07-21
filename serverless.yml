@@ -13,6 +13,8 @@ provider:
     TELEGRAM_BOT_TOKEN: ${ssm:/lorax/telegram-token}
     ADMIN_USER_IDS: ${ssm:/lorax/admin-users}
     STAGE: ${sls:stage}
+    TRACKER_TABLE_NAME: !Ref TrackerTable
+    ALLOW_LIST_TABLE_NAME: !Ref AllowListTable
   iam:
     role:
       statements:

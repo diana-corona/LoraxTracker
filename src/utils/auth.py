@@ -15,7 +15,7 @@ class Authorization:
     """Authorization utility class."""
     
     def __init__(self):
-        self.dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
+        self.dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
     
     def check_user_authorized(self, user_id: str) -> bool:
         """

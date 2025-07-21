@@ -17,7 +17,7 @@ def sample_user() -> User:
         user_id="123",
         chat_id_private="private123",
         chat_id_group="group123",
-        user_type="principal",
+        user_type="primary",
         name="Test User",
         registration_date="2024-01-01T00:00:00"
     )
