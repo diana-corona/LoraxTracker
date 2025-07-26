@@ -10,6 +10,7 @@ from statistics import mean
 from aws_lambda_powertools import Logger
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType
+from src.services.exceptions import InvalidPeriodDurationError
 
 logger = Logger()
 
@@ -84,26 +85,43 @@ def filter_recent_events(events: List[CycleEvent], max_periods: int = 12) -> Lis
     # Sort back to chronological order
     return sorted(filtered_events, key=lambda x: x.date)
 
-def find_period_ranges(events: List[CycleEvent]) -> List[Tuple[datetime.date, datetime.date]]:
+def find_period_ranges(events: List[CycleEvent], max_gap: int = 1) -> List[Tuple[datetime.date, datetime.date]]:
     """
     Find start and end dates for each period.
     
     Args:
         events: List of cycle events to analyze
+        max_gap: Maximum number of days gap allowed within same period (default: 1)
         
     Returns:
         List of tuples containing (period_start_date, period_end_date)
+        
+    Note:
+        Periods are considered continuous if gap between menstruation days
+        is not more than max_gap days. This handles missing data while still
+        maintaining physiologically reasonable period lengths.
     """
     period_ranges = []
     period_start = None
     last_date = None
     
-    for event in events:
+    for i, event in enumerate(events):
         if event.state == TraditionalPhaseType.MENSTRUATION.value:
             if period_start is None:
                 period_start = event.date
-            last_date = event.date
+                last_date = event.date
+            else:
+                # Check if this is continuous with previous menstruation
+                days_gap = (event.date - last_date).days - 1
+                if days_gap <= max_gap:
+                    last_date = event.date
+                else:
+                    # Gap too large, end previous period and start new one
+                    period_ranges.append((period_start, last_date))
+                    period_start = event.date
+                    last_date = event.date
         elif period_start is not None:
+            # Non-menstruation event after period
             period_ranges.append((period_start, last_date))
             period_start = None
             
@@ -150,15 +168,39 @@ def calculate_cycle_statistics(events: List[CycleEvent]) -> Dict:
             "last_two_periods": []
         }
     
-    # Calculate period durations
-    period_durations = [(end - start).days + 1 for start, end in period_ranges]
+    # Calculate and validate period durations
+    period_durations = []
+    for start, end in period_ranges:
+        duration = (end - start).days + 1
+        if duration < 2 or duration > 10:
+            logger.warning(
+                "Invalid period duration detected",
+                extra={
+                    "start_date": str(start),
+                    "end_date": str(end),
+                    "duration": duration
+                }
+            )
+            raise InvalidPeriodDurationError(
+                f"Period duration of {duration} days is outside normal range (2-10 days)"
+            )
+        period_durations.append(duration)
     
-    # Calculate days between periods
+    # Calculate days between periods (exclusive of end dates)
     days_between = []
     for i in range(1, len(period_ranges)):
         current_start = period_ranges[i][0]
         prev_end = period_ranges[i-1][1]
+        # Calculate days between periods, not counting the end date of previous period
         days_between.append((current_start - prev_end).days - 1)
+        logger.info(
+            "Calculated days between periods",
+            extra={
+                "previous_end": str(prev_end),
+                "current_start": str(current_start),
+                "days_between": days_between[-1]
+            }
+        )
     
     # Get last two periods with durations
     last_two = []
