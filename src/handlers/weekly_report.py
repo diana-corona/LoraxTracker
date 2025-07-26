@@ -3,6 +3,7 @@ Lambda handler for generating and sending weekly reports.
 """
 from typing import Dict, List
 import json
+import asyncio
 
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.utilities.typing import LambdaContext
@@ -12,7 +13,7 @@ from src.utils.telegram import TelegramClient
 from src.utils.auth import Authorization
 from src.models.event import CycleEvent
 from src.models.user import User
-from src.services.phase import get_current_phase, generate_phase_report
+from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
 
 logger = Logger()
 tracer = Tracer()
@@ -64,30 +65,21 @@ async def send_user_report(user: User) -> None:
             logger.info(f"No events found for user {user.user_id}")
             return
             
-        # Get current phase
-        current_phase = get_current_phase(cycle_events)
-        
-        # Generate report
-        report = generate_phase_report(current_phase, cycle_events)
-        
-        # Add weekly summary header
-        weekly_report = [
-            "📅 Weekly Cycle Summary",
-            "------------------------",
-            *report
-        ]
+        # Generate and format weekly plan
+        weekly_plan = generate_weekly_plan(cycle_events)
+        formatted_plan = format_weekly_plan(weekly_plan)
         
         # Send to private chat
         await telegram.send_message(
             chat_id=user.chat_id_private,
-            text="\n".join(weekly_report)
+            text="\n".join(formatted_plan)
         )
         
         # Send to group if configured
         if user.chat_id_group and auth.verify_group_access(user.chat_id_group):
             await telegram.send_message(
                 chat_id=user.chat_id_group,
-                text="\n".join(weekly_report)
+                text="\n".join(formatted_plan)
             )
             
     except Exception as e:
@@ -112,7 +104,6 @@ def handler(event: Dict, context: LambdaContext) -> Dict:
         logger.info(f"Found {len(users)} active users")
         
         # Send reports
-        import asyncio
         asyncio.run(asyncio.gather(*[
             send_user_report(user)
             for user in users
