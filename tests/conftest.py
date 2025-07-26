@@ -1,14 +1,24 @@
 """
 Pytest configuration and shared fixtures.
 """
+import os
 import pytest
 from datetime import date, timedelta
 from typing import List
+from unittest.mock import patch, MagicMock
 
-from src.models.event import CycleEvent
-from src.models.phase import TraditionalPhaseType
-from src.models.user import User
-from src.models.recommendation import RecommendationType
+# Mock TelegramClient before any imports
+mock_client = MagicMock()
+with patch('src.utils.telegram.client.TelegramClient', return_value=mock_client) as _:
+    from src.models.event import CycleEvent
+    from src.models.phase import TraditionalPhaseType
+    from src.models.user import User
+    from src.models.recommendation import RecommendationType
+
+@pytest.fixture
+def telegram_client():
+    """Get the mock telegram client."""
+    return mock_client
 
 @pytest.fixture
 def sample_user() -> User:

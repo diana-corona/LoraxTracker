@@ -6,7 +6,6 @@ from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
 from src.utils.telegram import TelegramClient
-from src.services.group_phase_distribution import format_group_phase_message
 
 logger = Logger()
 telegram = TelegramClient()
@@ -16,7 +15,7 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     Handle /start command.
     
     For users in private chats, displays welcome message with available commands.
-    For group chats, displays phase recommendations for the next 7 days.
+    For group chats, displays a simple welcome message.
     
     Args:
         user_id: Telegram user ID
@@ -28,7 +27,7 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     try:
         # Get chat info to determine if it's a group
         chat_info = telegram.get_chat(chat_id)
-        is_group = chat_info.get('type') in ['group', 'supergroup']
+        is_group = chat_info.get('type') in ['group', 'supergroup'] or str(chat_id).startswith('-')
         
         # Log new interaction
         logger.info(
@@ -42,7 +41,7 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         )
         
         if is_group:
-            message = format_group_phase_message(user_id)
+            message = "Hi! I'm Lorax, your weekly planner assistant. 🌙"
         else:
             message = (
                 "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
@@ -51,7 +50,8 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
                 "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
                 "/phase - View your current phase\n"
                 "/predict - View next cycle prediction\n"
-                "/statistics - View your cycle statistics"
+                "/statistics - View your cycle statistics\n"
+                "/mygroups - View your groups and partners"
             )
         
         telegram.send_message(chat_id=chat_id, text=message)
