@@ -8,7 +8,7 @@ from aws_lambda_powertools import Logger
 from src.utils.telegram import TelegramClient
 from src.utils.dynamo import DynamoDBClient, create_pk
 from src.models.event import CycleEvent
-from src.handlers.statistics import calculate_cycle_statistics, calculate_phase_statistics
+from src.handlers.statistics import calculate_cycle_statistics
 
 import os
 
@@ -48,33 +48,27 @@ def handle_statistics_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     
     # Calculate statistics
     cycle_stats = calculate_cycle_statistics(cycle_events)
-    phase_stats = calculate_phase_statistics(cycle_events)
     
     # Format message
     message = [
         "📊 Your Cycle Statistics",
         "------------------------",
         f"Total cycles tracked: {cycle_stats['total_cycles']}",
-        f"Average cycle length: {round(cycle_stats['average_cycle_length'], 1)} days",
-        f"Shortest cycle: {cycle_stats['min_cycle_length']} days",
-        f"Longest cycle: {cycle_stats['max_cycle_length']} days",
-        "",
-        "📈 Phase Statistics:",
+        f"Average period duration: {round(cycle_stats['average_period_duration'], 1)} days",
+        f"Average days between periods: {round(cycle_stats['average_days_between'], 1)} days",
     ]
-    
-    for phase, stats in phase_stats.items():
-        phase_info = [
-            f"\n{phase.title()}:",
-            f"• Average duration: {round(stats['average_duration'], 1)} days",
-            f"• Occurrences: {stats['occurrence_count']} times"
-        ]
-        
-        if stats['average_pain_level'] is not None:
-            phase_info.append(f"• Average pain level: {round(stats['average_pain_level'], 1)}/5")
-        if stats['average_energy_level'] is not None:
-            phase_info.append(f"• Average energy level: {round(stats['average_energy_level'], 1)}/5")
-            
-        message.extend(phase_info)
+
+    # Add last two periods if available
+    if cycle_stats['last_two_periods']:
+        message.extend([
+            "",
+            "Last Two Periods:",
+            "---------------"
+        ])
+        for period in reversed(cycle_stats['last_two_periods']):  # Show most recent first
+            start_date = period['start_date'].strftime('%Y-%m-%d')
+            end_date = period['end_date'].strftime('%Y-%m-%d')
+            message.append(f"• {start_date} to {end_date} ({period['duration']} days)")
     
     telegram.send_message(
         chat_id=chat_id,
