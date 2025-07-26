@@ -2,6 +2,7 @@
 Lambda handler for processing Telegram webhook requests.
 """
 import json
+import requests
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -103,13 +104,20 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
             "isBase64Encoded": False
         }
         
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            # Propagate 429 status to trigger Telegram's retry mechanism
+            return {
+                "statusCode": 429,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"ok": False, "error_code": 429, "description": "Rate limit exceeded"})
+            }
+        raise
     except Exception as e:
         logger.exception("Error processing webhook")
         return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
+            "statusCode": 200,  # Keep 200 for other errors to avoid infinite retries
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"ok": False, "error_code": 500, "description": str(e)})
         }
 
@@ -191,12 +199,24 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
         elif command == "/predict":
             return handle_prediction_command(user_id, chat_id)
             
+        elif command == "/statistics":
+            return handle_statistics_command(user_id, chat_id)
+            
         else:
             return telegram.send_message(
                 chat_id=chat_id,
                 text="Unrecognized command. Use /help to see available commands."
             )
             
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            # Propagate 429 status to trigger Telegram's retry mechanism
+            return {
+                "statusCode": 429,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"ok": False, "error_code": 429, "description": "Rate limit exceeded"})
+            }
+        raise
     except Exception as e:
         logger.exception(f"Error handling command {command}")
         telegram.send_message(
@@ -204,10 +224,8 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
             text=format_error_message(e)
         )
         return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
+            "statusCode": 200,  # Keep 200 for other errors to avoid infinite retries
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
                 "ok": False,
                 "error_code": 500,
@@ -259,7 +277,8 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         "/register YYYY-MM-DD - Register a cycle event\n"
         "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
         "/phase - View your current phase\n"
-        "/predict - View next cycle prediction"
+        "/predict - View next cycle prediction\n"
+        "/statistics - View your cycle statistics"
     )
     
     telegram.send_message(
@@ -441,15 +460,6 @@ def handle_phase_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     report = generate_phase_report(current_phase, cycle_events)
     telegram.send_phase_report(chat_id, report)
     
-    # Generate and send recommendations
-    engine = RecommendationEngine(user_id)
-    recommendation = engine.generate_recommendations(current_phase, cycle_events)
-    
-    telegram.send_recommendation(
-        chat_id,
-        recommendation.recommendations
-    )
-    
     return {
         "statusCode": 200,
         "headers": {
@@ -460,6 +470,82 @@ def handle_phase_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             "result": {"message": "Phase report sent"}
         }),
         "isBase64Encoded": False
+    }
+
+def handle_statistics_command(user_id: str, chat_id: str) -> Dict[str, Any]:
+    """Handle /statistics command."""
+    from src.handlers.statistics import calculate_cycle_statistics, calculate_phase_statistics
+    
+    # Get user's events
+    events = dynamo.query_items(
+        partition_key="PK",
+        partition_value=create_pk(user_id)
+    )
+    
+    if not events:
+        telegram.send_message(
+            chat_id=chat_id,
+            text="No cycle data found. Use /register to start tracking."
+        )
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "ok": False,
+                "error_code": 404,
+                "description": "No events found"
+            })
+        }
+    
+    # Convert to CycleEvent objects
+    cycle_events = [
+        CycleEvent(**event)
+        for event in events
+        if event["SK"].startswith("EVENT#")
+    ]
+    
+    # Calculate statistics
+    cycle_stats = calculate_cycle_statistics(cycle_events)
+    phase_stats = calculate_phase_statistics(cycle_events)
+    
+    # Format message
+    message = [
+        "📊 Your Cycle Statistics",
+        "------------------------",
+        f"Total cycles tracked: {cycle_stats['total_cycles']}",
+        f"Average cycle length: {round(cycle_stats['average_cycle_length'], 1)} days",
+        f"Shortest cycle: {cycle_stats['min_cycle_length']} days",
+        f"Longest cycle: {cycle_stats['max_cycle_length']} days",
+        "",
+        "📈 Phase Statistics:",
+    ]
+    
+    for phase, stats in phase_stats.items():
+        phase_info = [
+            f"\n{phase.title()}:",
+            f"• Average duration: {round(stats['average_duration'], 1)} days",
+            f"• Occurrences: {stats['occurrence_count']} times"
+        ]
+        
+        if stats['average_pain_level'] is not None:
+            phase_info.append(f"• Average pain level: {round(stats['average_pain_level'], 1)}/5")
+        if stats['average_energy_level'] is not None:
+            phase_info.append(f"• Average energy level: {round(stats['average_energy_level'], 1)}/5")
+            
+        message.extend(phase_info)
+    
+    telegram.send_message(
+        chat_id=chat_id,
+        text="\n".join(message)
+    )
+    
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({
+            "ok": True,
+            "result": {"message": "Statistics sent"}
+        })
     }
 
 def handle_prediction_command(user_id: str, chat_id: str) -> Dict[str, Any]:

@@ -19,13 +19,6 @@ provider:
     apiKeys:
       - name: loraxApiKey
         description: API key for Lorax Tracker webhook
-    usagePlan:
-      quota:
-        limit: 1000
-        period: DAY
-      throttle:
-        burstLimit: 20
-        rateLimit: 10
   iam:
     role:
       statements:
@@ -77,7 +70,7 @@ functions:
           path: /webhook
           method: post
           cors: true
-          private: true
+          private: false
     timeout: 29
     memorySize: 256
     layers:

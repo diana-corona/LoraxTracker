@@ -9,7 +9,7 @@ class RecommendationType(BaseModel):
     """
     Defines a type of recommendation with its category and priority.
     """
-    category: str = Field(..., pattern="^(ejercicio|nutricion|descanso|actividad|emocional)$")
+    category: str = Field(..., pattern="^(exercise|nutrition|rest|activity|emotional)$")
     priority: int = Field(..., ge=1, le=5)
     description: str
 
@@ -18,7 +18,7 @@ class Recommendation(BaseModel):
     Represents a personalized recommendation for a specific phase.
     """
     user_id: str
-    phase_type: str = Field(..., pattern="^(menstruacion|folicular|ovulacion|lutea)$")
+    phase_type: str = Field(..., pattern="^(menstruation|follicular|ovulation|luteal)$")
     date: date
     recommendations: List[RecommendationType]
     user_feedback: Optional[str] = None

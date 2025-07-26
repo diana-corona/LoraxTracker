@@ -50,7 +50,7 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
     warning = None
     if len(intervals) >= 3:
         cycle_stddev = stdev(intervals)
-        if cycle_stddev > 5:  # More than 5 days variation
+        if cycle_stddev > 10:  # More than 10 days variation
             warning = "Irregular cycle detected"
     
     last_date = menstruation_events[-1].date

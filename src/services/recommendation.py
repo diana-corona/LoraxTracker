@@ -59,7 +59,7 @@ class RecommendationEngine:
         
         return Recommendation(
             user_id=self.user_id,
-            phase_type=current_phase.functional_phase.value,
+            phase_type=current_phase.traditional_phase.value,
             date=date.today(),
             recommendations=personalized_recommendations,
             is_implemented=False
@@ -169,7 +169,7 @@ class RecommendationEngine:
                 priority = min(5, priority + 1)  # Higher priority for activities
                 
         elif functional_phase == FunctionalPhaseType.NURTURE:
-            if recommendation.category == "rest":
+            if recommendation.category == "rest":  # This is already correct, matching for consistent casing
                 priority = min(5, priority + 1)  # Higher priority for rest
             if "fasting" in recommendation.description.lower():
                 priority = max(1, priority - 2)  # Lower priority for fasting

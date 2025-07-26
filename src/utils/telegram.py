@@ -47,6 +47,10 @@ class TelegramClient:
             f"{self.base_url}/sendMessage",
             json=data
         )
+        if response.status_code == 429:
+            # Let the error propagate so Lambda returns non-200 status
+            # This allows Telegram's retry mechanism to work
+            response.raise_for_status()
         return {
             "statusCode": 200,
             "headers": {

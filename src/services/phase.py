@@ -327,11 +327,11 @@ def get_phase_specific_recommendations(
     if phase_details.get('supplement_recommendations'):
         for supp_rec in phase_details['supplement_recommendations']:
             recommendations.append(
-                RecommendationType(
-                    category="supplements",
-                    priority=3,
-                    description=f"Consider supplementing with {supp_rec}"
-                )
+            RecommendationType(
+                category="nutrition",
+                priority=3,
+                description=f"Consider supplementing with {supp_rec}"
+            )
             )
     
     return recommendations
