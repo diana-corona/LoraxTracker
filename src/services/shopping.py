@@ -1,11 +1,22 @@
 """
 Service module for generating shopping lists based on predicted phases.
+
+This module provides functionality to generate personalized shopping lists
+based on the user's current cycle phase and predictions for upcoming phases.
+
+Typical usage:
+    >>> phase = get_current_phase(events)
+    >>> generator = ShoppingListGenerator()
+    >>> items = generator.generate_weekly_list(phase)
+    >>> formatted_list = generator.generate_shopping_list(items)
+    >>> print(formatted_list)
 """
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 from datetime import date, timedelta
 
 from src.models.phase import Phase, FunctionalPhaseType
 from src.services.phase import get_current_phase, predict_next_phase
+from src.services.constants import PHASE_INGREDIENTS, SHOPPING_ICONS
 
 class ShoppingListGenerator:
     """Generator for phase-appropriate shopping lists."""
@@ -19,7 +30,17 @@ class ShoppingListGenerator:
             current_phase: Current phase to base predictions on
             
         Returns:
-            Dictionary of categorized shopping items
+            Dictionary mapping categories to sorted lists of ingredients:
+            {
+                "proteins": ["eggs", "fish", ...],
+                "vegetables": ["broccoli", "kale", ...],
+                ...
+            }
+            
+        Example:
+            >>> phase = get_current_phase(events)
+            >>> items = ShoppingListGenerator.generate_weekly_list(phase)
+            >>> print(f"Proteins needed: {', '.join(items['proteins'])}")
         """
         # Get phases for the next week
         phases = [current_phase]
@@ -52,7 +73,19 @@ class ShoppingListGenerator:
     
     @staticmethod
     def _get_phase_ingredients(phase_type: FunctionalPhaseType) -> Dict[str, Set[str]]:
-        """Get recommended ingredients for a specific phase."""
+        """
+        Get recommended ingredients for a specific phase.
+        
+        Args:
+            phase_type: Functional phase type to get ingredients for
+            
+        Returns:
+            Dictionary mapping categories to sets of ingredients
+            
+        Example:
+            >>> ingredients = ShoppingListGenerator._get_phase_ingredients(FunctionalPhaseType.POWER)
+            >>> print(f"Recommended fats: {', '.join(ingredients['fats'])}")
+        """
         base_ingredients = {
             "proteins": set(),
             "vegetables": set(),
@@ -63,123 +96,13 @@ class ShoppingListGenerator:
             "others": set()
         }
         
-        if phase_type == FunctionalPhaseType.POWER:
-            base_ingredients.update({
-                "fats": {
-                    "avocado",
-                    "olive oil",
-                    "coconut oil",
-                    "ghee (clarified butter)",
-                    "mixed nuts"
-                },
-                "proteins": {
-                    "fish",
-                    "eggs",
-                    "tofu",
-                    "organic chicken"
-                },
-                "vegetables": {
-                    "broccoli",
-                    "brussels sprouts",
-                    "curly cabbage",
-                    "kale",
-                    "bok choy",
-                    "garlic",
-                    "onion",
-                    "leek",
-                    "dandelion root",
-                    "artichoke",
-                    "spinach",
-                    "sprouts"
-                },
-                "others": {
-                    "kimchi",
-                    "sauerkraut",
-                    "yogurt",
-                    "kefir"
-                },
-                "fruits": {
-                    "blueberries",
-                    "strawberries"
-                }
-            })
+        if phase_type in PHASE_INGREDIENTS:
+            base_ingredients.update(PHASE_INGREDIENTS[phase_type])
             
-        elif phase_type == FunctionalPhaseType.MANIFESTATION:
-            base_ingredients.update({
-                "vegetables": {
-                    "beetroot",
-                    "carrot",
-                    "turnip",
-                    "fennel",
-                    "cauliflower",
-                    "kale",
-                    "broccoli",
-                    "fermented pickles",
-                    "parsley",
-                    "red onion",
-                    "radishes"
-                },
-                "fruits": {
-                    "grapefruit",
-                    "pineapple",
-                    "mango",
-                    "papaya",
-                    "mixed berries"
-                },
-                "others": {
-                    "dark chocolate",
-                    "olives",
-                    "red wine (optional)",
-                    "almonds",
-                    "cashews",
-                    "brazil nuts"
-                }
-            })
-            
-        else:  # NURTURE
-            base_ingredients.update({
-                "carbohydrates": {
-                    "sweet potato",
-                    "cassava",
-                    "red potato",
-                    "butternut squash",
-                    "beetroot",
-                    "yam",
-                    "oats",
-                    "brown rice",
-                    "quinoa",
-                    "lentils"
-                },
-                "fruits": {
-                    "banana",
-                    "dates",
-                    "figs",
-                    "apples"
-                },
-                "others": {
-                    "sunflower seeds",
-                    "dark chocolate",
-                    "chickpeas",
-                    "chamomile",
-                    "ginger",
-                    "fennel"
-                },
-                "proteins": {
-                    "chicken for broth",
-                    "turkey",
-                    "mixed legumes"
-                },
-                "supplements": {
-                    "magnesium",
-                    "vitamin B6",
-                    "omega-3"
-                }
-            })
-        
         return base_ingredients
 
     @staticmethod
-    def generate_shopping_list(items: dict[str, list[str]]) -> str:
+    def generate_shopping_list(items: Dict[str, List[str]]) -> str:
         """
         Format a categorized shopping list for display.
         
@@ -187,27 +110,29 @@ class ShoppingListGenerator:
             items: Dictionary of categorized items
             
         Returns:
-            Formatted shopping list string
+            Formatted shopping list string with emoji categories
+            
+        Example:
+            >>> items = {"fruits": ["apple", "banana"], "vegetables": ["kale", "spinach"]}
+            >>> print(ShoppingListGenerator.generate_shopping_list(items))
+            🛒 Shopping List
+            
+            🍎 Fruits:
+              • apple
+              • banana
+            
+            🥬 Vegetables:
+              • kale
+              • spinach
         """
         formatted_list = ["🛒 Shopping List"]
         
-        # Category icons
-        icons = {
-            "proteins": "🥩",
-            "vegetables": "🥬",
-            "fruits": "🍎",
-            "fats": "🥑",
-            "carbohydrates": "🌾",
-            "supplements": "💊",
-            "others": "🧂"
-        }
-        
-        # Add non-empty categories
+        # Add non-empty categories with icons from constants
         for category, items_list in items.items():
             if items_list:  # Only include categories with items
                 formatted_list.extend([
                     "",
-                    f"{icons.get(category, '•')} {category.title()}:",
+                    f"{SHOPPING_ICONS.get(category, '•')} {category.title()}:",
                     *[f"  • {item}" for item in sorted(items_list)]
                 ])
         

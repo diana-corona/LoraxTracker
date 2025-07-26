@@ -1,5 +1,14 @@
 """
 Service module for menstrual cycle calculations and predictions.
+
+This module provides functionality for analyzing cycle data and making predictions
+about future cycles based on historical data. It also includes utilities for
+determining cycle phases and generating phase-specific information.
+
+Typical usage:
+    events = get_user_events(user_id)
+    next_date, duration, warning = calculate_next_cycle(events)
+    current_phase = analyze_cycle_phase(events)
 """
 from typing import List, Tuple, Optional
 from datetime import date, timedelta
@@ -7,7 +16,13 @@ from statistics import mean, stdev
 
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType, Phase
-from src.services.phase import get_phase_details, map_to_functional_phase
+from src.services.phase import get_phase_details
+from src.services.utils import (
+    get_menstruation_events,
+    calculate_cycle_day,
+    determine_traditional_phase,
+    determine_functional_phase
+)
 
 def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[str]]:
     """
@@ -21,22 +36,30 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
         - Predicted next cycle start date
         - Average cycle duration in days
         - Warning message if cycle irregularity detected
+        
+    Raises:
+        ValueError: If no events are provided
+        
+    Example:
+        >>> events = get_user_events(user_id)
+        >>> next_date, duration, warning = calculate_next_cycle(events)
+        >>> print(f"Next cycle expected on {next_date}, avg duration: {duration} days")
+        >>> if warning:
+        ...     print(f"Warning: {warning}")
     """
     if not events:
         raise ValueError("No events provided for prediction")
         
-    # Filter menstruation events and sort by date
-    menstruation_events = sorted(
-        [e for e in events if e.state == "menstruation"],
-        key=lambda x: x.date
-    )
+    menstruation_events = get_menstruation_events(events)
     
     if len(menstruation_events) < 2:
-        return (
-            menstruation_events[0].date + timedelta(days=28),
-            28,
-            "Insufficient data for accurate prediction"
-        )
+        if menstruation_events:
+            return (
+                menstruation_events[0].date + timedelta(days=28),
+                28,
+                "Insufficient data for accurate prediction"
+            )
+        raise ValueError("No menstruation events found for prediction")
     
     # Calculate intervals between cycles
     intervals = []
@@ -68,49 +91,35 @@ def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = 
         
     Returns:
         Phase object containing phase information
+        
+    Raises:
+        ValueError: If no events found or no menstruation events in history
+        
+    Example:
+        >>> events = get_user_events(user_id)
+        >>> phase = analyze_cycle_phase(events)
+        >>> print(f"Current phase: {phase.traditional_phase}")
+        >>> print(f"Functional phase: {phase.functional_phase}")
     """
     if target_date is None:
         target_date = date.today()
+
+    cycle_day = calculate_cycle_day(events, target_date)
+    phase_type, duration = determine_traditional_phase(cycle_day)
+    functional_phase = determine_functional_phase(cycle_day)
+
+    # Calculate phase dates
+    menstruation_events = get_menstruation_events(events, reverse=True)
+    if not menstruation_events:
+        raise ValueError("No menstruation events found")
         
-    # Get the most recent menstruation event before target date
-    recent_events = [
-        e for e in sorted(events, key=lambda x: x.date, reverse=True)
-        if e.date <= target_date
-    ]
-    
-    if not recent_events:
-        raise ValueError("No events found before target date")
-    
-    last_menstruation = next(
-        (e for e in recent_events if e.state == "menstruation"),
-        None
-    )
-    
-    if not last_menstruation:
-        raise ValueError("No menstruation event found in history")
-    
+    last_menstruation = menstruation_events[0]
     days_since = (target_date - last_menstruation.date).days
-    
-    # Determine phase based on typical cycle lengths
-    if days_since < 5:
-        phase_type = TraditionalPhaseType.MENSTRUATION
-        duration = 5
-    elif days_since < 14:
-        phase_type = TraditionalPhaseType.FOLLICULAR
-        duration = 9
-    elif days_since < 17:
-        phase_type = TraditionalPhaseType.OVULATION
-        duration = 3
-    else:
-        phase_type = TraditionalPhaseType.LUTEAL
-        duration = 11
-    
     start_date = target_date - timedelta(days=days_since % duration)
     end_date = start_date + timedelta(days=duration)
     
     # Get phase details from phase service
-    phase_details = get_phase_details(phase_type, days_since + 1)
-    functional_phase = map_to_functional_phase(phase_type, days_since + 1)
+    phase_details = get_phase_details(phase_type, cycle_day)
 
     return Phase(
         traditional_phase=phase_type,
@@ -126,63 +135,3 @@ def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = 
         supplement_recommendations=phase_details.get("supplement_recommendations"),
         user_notes=None
     )
-
-def get_typical_symptoms(phase_type: TraditionalPhaseType) -> List[str]:
-    """Get typical symptoms for a given phase."""
-    symptoms = {
-        TraditionalPhaseType.MENSTRUATION: [
-            "Cramping",
-            "Fatigue",
-            "Lower back pain",
-            "Headaches"
-        ],
-        TraditionalPhaseType.FOLLICULAR: [
-            "Increased energy",
-            "Better mood",
-            "Higher cognitive function",
-            "Increased motivation"
-        ],
-        TraditionalPhaseType.OVULATION: [
-            "Mild pelvic pain",
-            "Increased libido",
-            "Breast tenderness",
-            "Increased energy levels"
-        ],
-        TraditionalPhaseType.LUTEAL: [
-            "Mood changes",
-            "Breast tenderness",
-            "Fatigue",
-            "Food cravings"
-        ]
-    }
-    return symptoms[phase_type]
-
-def get_phase_recommendations(phase_type: TraditionalPhaseType) -> List[str]:
-    """Get general recommendations for a given phase."""
-    recommendations = {
-        TraditionalPhaseType.MENSTRUATION: [
-            "Rest and self-care",
-            "Light exercise like walking or yoga",
-            "Iron-rich foods",
-            "Warm compress for cramps"
-        ],
-        TraditionalPhaseType.FOLLICULAR: [
-            "High-intensity workouts",
-            "Start new projects",
-            "Social activities",
-            "Learning new skills"
-        ],
-        TraditionalPhaseType.OVULATION: [
-            "Challenging workouts",
-            "Important presentations/meetings",
-            "Social events",
-            "Creative activities"
-        ],
-        TraditionalPhaseType.LUTEAL: [
-            "Moderate exercise",
-            "Organizational tasks",
-            "Meal planning",
-            "Relaxation techniques"
-        ]
-    }
-    return recommendations[phase_type]

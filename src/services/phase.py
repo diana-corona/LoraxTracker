@@ -1,5 +1,14 @@
 """
 Service module for handling menstrual cycle phases and transitions.
+
+This module provides functionality for managing cycle phases, including phase
+determination, transitions between phases, and generating phase-specific details
+and recommendations.
+
+Typical usage:
+    >>> phase = get_current_phase(user_events)
+    >>> details = get_phase_details(phase.traditional_phase, cycle_day)
+    >>> recommendations = get_phase_specific_recommendations(phase.traditional_phase)
 """
 from typing import List, Optional
 from datetime import date, timedelta
@@ -7,6 +16,19 @@ from datetime import date, timedelta
 from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.event import CycleEvent
 from src.models.recommendation import Recommendation, RecommendationType
+from src.services.constants import (
+    TRADITIONAL_PHASE_SYMPTOMS,
+    TRADITIONAL_PHASE_DURATIONS,
+    FUNCTIONAL_PHASE_DETAILS,
+    PHASE_TRANSITIONS,
+    FUNCTIONAL_PHASE_MAPPING
+)
+from src.services.utils import (
+    calculate_cycle_day,
+    determine_traditional_phase,
+    determine_functional_phase,
+    get_menstruation_events
+)
 
 def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = None) -> Phase:
     """
@@ -18,45 +40,35 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
         
     Returns:
         Current Phase object with both traditional and functional phase information
+        
+    Raises:
+        ValueError: If no menstruation events are found
+        
+    Example:
+        >>> events = get_user_events(user_id)
+        >>> phase = get_current_phase(events)
+        >>> print(f"Current phase: {phase.traditional_phase.value}")
     """
     if not target_date:
         target_date = date.today()
 
-    # Get most recent menstruation event
-    menstruation_events = sorted(
-        [e for e in events if e.state == "menstruation"],
-        key=lambda x: x.date,
-        reverse=True
-    )
+    cycle_day = calculate_cycle_day(events, target_date)
+    traditional_phase, duration = determine_traditional_phase(cycle_day)
+    functional_phase = determine_functional_phase(cycle_day)
     
+    # Calculate phase dates
+    menstruation_events = get_menstruation_events(events, reverse=True)
     if not menstruation_events:
         raise ValueError("No menstruation events found")
-    
+        
     last_menstruation = menstruation_events[0]
     days_since = (target_date - last_menstruation.date).days
     
-    # Determine traditional phase
-    if days_since < 5:
-        traditional_phase = TraditionalPhaseType.MENSTRUATION
-        duration = 5
-    elif days_since < 12:
-        traditional_phase = TraditionalPhaseType.FOLLICULAR
-        duration = 7
-    elif days_since < 15:
-        traditional_phase = TraditionalPhaseType.OVULATION
-        duration = 3
-    else:
-        traditional_phase = TraditionalPhaseType.LUTEAL
-        duration = 11
-    
-    # Map to functional phase
-    functional_phase = map_to_functional_phase(traditional_phase, days_since + 1)
-    
-    # Get phase details
-    phase_details = get_phase_details(traditional_phase, days_since + 1)
-    
     start_date = target_date - timedelta(days=days_since % duration)
     end_date = start_date + timedelta(days=duration)
+    
+    # Get phase details
+    phase_details = get_phase_details(traditional_phase, cycle_day)
     
     return Phase(
         traditional_phase=traditional_phase,
@@ -82,15 +94,13 @@ def predict_next_phase(current_phase: Phase) -> Phase:
         
     Returns:
         Predicted next Phase object
+        
+    Example:
+        >>> current = get_current_phase(events)
+        >>> next_phase = predict_next_phase(current)
+        >>> print(f"Next phase will be: {next_phase.traditional_phase.value}")
     """
-    traditional_sequence = {
-        TraditionalPhaseType.MENSTRUATION: TraditionalPhaseType.FOLLICULAR,
-        TraditionalPhaseType.FOLLICULAR: TraditionalPhaseType.OVULATION,
-        TraditionalPhaseType.OVULATION: TraditionalPhaseType.LUTEAL,
-        TraditionalPhaseType.LUTEAL: TraditionalPhaseType.MENSTRUATION
-    }
-    
-    next_traditional_phase = traditional_sequence[current_phase.traditional_phase]
+    next_traditional_phase = PHASE_TRANSITIONS[current_phase.traditional_phase]
     next_start_date = current_phase.end_date + timedelta(days=1)
     
     # Calculate cycle day for next phase
@@ -107,17 +117,10 @@ def predict_next_phase(current_phase: Phase) -> Phase:
     phase_details = get_phase_details(next_traditional_phase, cycle_day)
     
     # Map to functional phase
-    next_functional_phase = map_to_functional_phase(next_traditional_phase, cycle_day)
+    next_functional_phase = determine_functional_phase(cycle_day)
     
     # Set duration based on traditional phase
-    durations = {
-        TraditionalPhaseType.MENSTRUATION: 5,
-        TraditionalPhaseType.FOLLICULAR: 9,
-        TraditionalPhaseType.OVULATION: 3,
-        TraditionalPhaseType.LUTEAL: 11
-    }
-    
-    duration = durations[next_traditional_phase]
+    duration = TRADITIONAL_PHASE_DURATIONS[next_traditional_phase]
     next_end_date = next_start_date + timedelta(days=duration - 1)
     
     return Phase(
@@ -144,131 +147,28 @@ def get_phase_details(traditional_phase: TraditionalPhaseType, cycle_day: int) -
         cycle_day: Day in the cycle (1-based)
         
     Returns:
-        Dictionary with phase details
-    """
-    # Map traditional phase and cycle day to functional phase
-    functional_phase = map_to_functional_phase(traditional_phase, cycle_day)
-    
-    # Base symptoms by traditional phase
-    traditional_symptoms = {
-        TraditionalPhaseType.MENSTRUATION: [
-            "Cramping and uterine contractions",
-            "Lower back and abdominal pain",
-            "Fatigue and low energy",
-            "Headaches or migraines",
-            "Changes in appetite",
-            "Mood fluctuations"
-        ],
-        TraditionalPhaseType.FOLLICULAR: [
-            "Increased energy levels",
-            "Enhanced mood and optimism",
-            "Better cognitive function",
-            "Increased creativity",
-            "Higher motivation",
-            "Decreased PMS symptoms"
-        ],
-        TraditionalPhaseType.OVULATION: [
-            "Mild pelvic pain or cramping",
-            "Changes in cervical mucus",
-            "Increased sex drive",
-            "Breast tenderness",
-            "Heightened energy levels",
-            "Improved mood and confidence"
-        ],
-        TraditionalPhaseType.LUTEAL: [
-            "Premenstrual symptoms (PMS)",
-            "Mood changes and irritability",
-            "Breast tenderness and swelling",
-            "Fatigue and decreased energy",
-            "Food cravings",
-            "Bloating and water retention"
-        ]
-    }
-    
-    # Functional phase details based on Dr. Mindy Pelz's recommendations
-    functional_details = {
-        FunctionalPhaseType.POWER: {
-            "dietary_style": "Ketobiotic",
-            "fasting_protocol": "13 to 72 hours as tolerated (16:8, 24h, OMAD)",
-            "food_recommendations": [
-                "Healthy fats: avocado, olive oil, coconut oil, ghee",
-                "Clean proteins: fish, eggs, tofu, organic chicken",
-                "Cruciferous vegetables: broccoli, Brussels sprouts, kale",
-                "Prebiotics: garlic, onion, leek, dandelion root",
-                "Seeds: flax, chia, pumpkin, sunflower, sesame",
-                "Natural probiotics: kimchi, sauerkraut, yogurt, kefir",
-                "Estrogen builders: spinach, sprouts, blueberries, strawberries"
-            ],
-            "activity_recommendations": [
-                "Low intensity exercise",
-                "Gentle yoga",
-                "Walking",
-                "Rest as needed",
-                "Meditation and relaxation practices"
-            ]
-        },
-        FunctionalPhaseType.MANIFESTATION: {
-            "dietary_style": "Transition from ketobiotic to hormone feasting",
-            "fasting_protocol": "No more than 15 hours, avoid extended fasts",
-            "food_recommendations": [
-                "Root vegetables: beets, carrots, turnips, fennel",
-                "Fresh fruits: grapefruit, berries, pineapple, mango, papaya",
-                "Cruciferous vegetables: cauliflower, kale, broccoli",
-                "Detox foods: fermented pickles, lemon, parsley",
-                "Polyphenols: olives, red onion, dark chocolate",
-                "Gut support: fermented foods, prebiotic fiber",
-                "Soft nuts and seeds: almonds, cashews, Brazil nuts"
-            ],
-            "activity_recommendations": [
-                "Moderate to high intensity exercise",
-                "Social activities",
-                "Creative projects",
-                "Important decision making",
-                "Networking and communication"
-            ]
-        },
-        FunctionalPhaseType.NURTURE: {
-            "dietary_style": "Extended hormone feasting",
-            "fasting_protocol": "Avoid fasting, frequent warm meals with complex carbs",
-            "food_recommendations": [
-                "Root vegetables: sweet potato, yuca, red potato, butternut squash",
-                "Complex carbs: oats, brown rice, quinoa",
-                "Magnesium & B6: banana, sunflower seeds, dark chocolate",
-                "Comfort fruits: dates, figs, cooked apple",
-                "Calming teas: chamomile, ginger root, fennel",
-                "Gentle proteins: chicken broth, turkey, soups"
-            ],
-            "activity_recommendations": [
-                "Gentle restorative exercise",
-                "Relaxing activities",
-                "Self-care and rest",
-                "Relaxation practices",
-                "Time in nature"
-            ],
-            "supplement_recommendations": [
-                "Magnesium",
-                "Vitamin B6",
-                "Omega-3",
-                "Probiotics"
-            ]
+        Dictionary containing phase-specific details:
+        {
+            "traditional_symptoms": List[str],
+            "dietary_style": str,
+            "fasting_protocol": str,
+            "food_recommendations": List[str],
+            "activity_recommendations": List[str],
+            "supplement_recommendations": Optional[List[str]]
         }
-    }
+        
+    Example:
+        >>> details = get_phase_details(TraditionalPhaseType.FOLLICULAR, 8)
+        >>> print(details["dietary_style"])
+        >>> print(len(details["food_recommendations"]))
+    """
+    # Map traditional phase to functional phase
+    functional_phase = determine_functional_phase(cycle_day)
     
     return {
-        "traditional_symptoms": traditional_symptoms[traditional_phase],
-        **functional_details[functional_phase]
+        "traditional_symptoms": TRADITIONAL_PHASE_SYMPTOMS[traditional_phase],
+        **FUNCTIONAL_PHASE_DETAILS[functional_phase]
     }
-
-def map_to_functional_phase(phase: TraditionalPhaseType, cycle_day: int) -> FunctionalPhaseType:
-    """Map traditional phase to functional phase based on Dr. Mindy Pelz's approach."""
-    if cycle_day <= 10:
-        return FunctionalPhaseType.POWER
-    elif cycle_day >= 11 and cycle_day <= 15:
-        return FunctionalPhaseType.MANIFESTATION
-    elif cycle_day >= 16 and cycle_day <= 19:
-        return FunctionalPhaseType.POWER
-    else:
-        return FunctionalPhaseType.NURTURE
 
 def get_phase_specific_recommendations(
     traditional_phase: TraditionalPhaseType,
