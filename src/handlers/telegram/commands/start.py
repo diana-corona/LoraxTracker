@@ -25,9 +25,8 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         Dict with API response
     """
     try:
-        # Get chat info to determine if it's a group
-        chat_info = telegram.get_chat(chat_id)
-        is_group = chat_info.get('type') in ['group', 'supergroup'] or str(chat_id).startswith('-')
+        # Check if it's a group chat based on chat_id format (groups start with -)
+        is_group = str(chat_id).startswith('-')
         
         # Log new interaction
         logger.info(
