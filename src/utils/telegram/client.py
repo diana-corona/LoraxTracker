@@ -1,18 +1,12 @@
 """
-Telegram bot utility functions for message handling.
+Telegram API client implementation.
 """
 import os
 from typing import Dict, Any, Optional, List
 import json
 import requests
 
-from src.utils.telegram.formatters import (
-    format_error_message,
-    format_phase_report,
-    format_recommendations
-)
-from src.utils.telegram.keyboards import create_inline_keyboard
-from src.utils.telegram.parsers import parse_command, parse_callback_data
+from .formatters import format_phase_report, format_recommendations
 
 class TelegramClient:
     """Client for interacting with Telegram Bot API."""

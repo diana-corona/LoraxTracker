@@ -64,7 +64,7 @@ package:
 
 functions:
   telegram:
-    handler: src.handlers.telegram.handler
+    handler: src.handlers.telegram.handler.handler
     events:
       - http:
           path: /webhook

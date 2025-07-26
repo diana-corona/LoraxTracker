@@ -2,6 +2,7 @@
 Telegram /register command handler.
 """
 import os
+import json
 from typing import Dict, Any, List
 from datetime import datetime
 

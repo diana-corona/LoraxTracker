@@ -1,9 +1,9 @@
 """
-Lambda handler for processing Telegram webhook requests.
+Main telegram webhook handler.
 """
 import json
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from datetime import datetime
 
 from aws_lambda_powertools import Logger, Tracer
@@ -12,25 +12,20 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from src.utils.telegram import (
     TelegramClient,
     parse_command,
-    validate_date,
-    validate_date_range,
-    generate_dates_in_range,
-    format_error_message,
-    create_rating_keyboard
+    format_error_message
 )
-from src.utils.dynamo import DynamoDBClient, create_pk, create_event_sk
-from src.utils.middleware import require_auth
-from src.utils.auth import Authorization, AuthorizationError
+from src.utils.dynamo import DynamoDBClient
+from src.utils.auth import Authorization
 from src.models.event import CycleEvent
-from src.handlers.telegram.admin import is_admin, handle_allow_command, handle_revoke_command
-from src.handlers.telegram.commands import (
+from .admin import is_admin, handle_allow_command, handle_revoke_command
+from .commands import (
     handle_start_command,
     handle_register_event,
     handle_phase_command,
     handle_prediction_command,
     handle_statistics_command
 )
-from src.handlers.telegram.callbacks import handle_callback_query
+from .callbacks import handle_callback_query
 
 logger = Logger()
 tracer = Tracer()

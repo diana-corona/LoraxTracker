@@ -1,26 +1,28 @@
 """
 Telegram utilities package.
 """
-from src.utils.telegram.formatters import (
+from .formatters import (
     format_error_message,
     format_phase_report,
     format_recommendations
 )
-from src.utils.telegram.keyboards import (
+from .keyboards import (
     create_inline_keyboard,
     create_rating_keyboard
 )
-from src.utils.telegram.parsers import (
+from .parsers import (
     parse_command,
     parse_callback_data
 )
-from src.utils.telegram.validators import (
+from .validators import (
     validate_date,
     validate_date_range,
     generate_dates_in_range
 )
+from .client import TelegramClient
 
 __all__ = [
+    "TelegramClient",
     "format_error_message",
     "format_phase_report",
     "format_recommendations",
