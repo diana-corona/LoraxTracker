@@ -22,9 +22,15 @@ from src.utils.dynamo import DynamoDBClient, create_pk, create_event_sk
 from src.utils.middleware import require_auth
 from src.utils.auth import Authorization, AuthorizationError
 from src.models.event import CycleEvent
-from src.services.cycle import calculate_next_cycle
-from src.services.phase import get_current_phase, generate_phase_report
-from src.services.recommendation import RecommendationEngine
+from src.handlers.telegram.admin import is_admin, handle_allow_command, handle_revoke_command
+from src.handlers.telegram.commands import (
+    handle_start_command,
+    handle_register_event,
+    handle_phase_command,
+    handle_prediction_command,
+    handle_statistics_command
+)
+from src.handlers.telegram.callbacks import handle_callback_query
 
 logger = Logger()
 tracer = Tracer()
@@ -34,19 +40,6 @@ import os
 dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 telegram = TelegramClient()
 auth = Authorization()
-
-def is_admin(user_id: str) -> bool:
-    """
-    Check if user is an admin.
-    
-    Args:
-        user_id: Telegram user ID to check
-        
-    Returns:
-        bool: True if user is an admin
-    """
-    admin_ids = os.environ.get("ADMIN_USER_IDS", "").split(",")
-    return user_id in admin_ids
 
 @logger.inject_lambda_context
 @tracer.capture_lambda_handler
@@ -64,16 +57,30 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     try:
         body = json.loads(event["body"])
         
-        # Extract user ID and command if present
+        # Extract message details and enhance logging
         user_id = None
         command = None
         
         if "message" in body:
-            user_id = str(body["message"]["from"]["id"])
+            chat = body["message"]["chat"]
+            user = body["message"]["from"]
             text = body["message"].get("text", "")
+            
+            user_id = str(user["id"])
             if text.startswith('/'):
                 command = text.split()[0]
-        
+                
+            # Enhanced logging for all messages
+            logger.info("Received message", extra={
+                "user_id": user_id,
+                "username": user.get("username"),
+                "chat_id": str(chat["id"]),
+                "chat_type": chat.get("type", "private"),
+                "message_type": "command" if text.startswith('/') else "text",
+                "command": command,
+                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+            })
+            
         # Check for admin commands before authorization
         if command in ["/allow", "/revoke"] and user_id in os.environ.get("ADMIN_USER_IDS", "").split(","):
             logger.info(f"Admin command access: {command} by user {user_id}")
@@ -81,7 +88,14 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         
         # For non-admin commands, apply authorization check
         if not auth.check_user_authorized(user_id):
-            logger.warning(f"Unauthorized access attempt from user {user_id}")
+            logger.warning("Unauthorized access attempt", extra={
+                "user_id": user_id,
+                "username": user.get("username") if "message" in body else None,
+                "chat_id": str(chat["id"]) if "message" in body else None,
+                "chat_type": chat.get("type", "private") if "message" in body else None,
+                "command": command,
+                "group_title": chat.get("title") if "message" in body and chat.get("type") in ["group", "supergroup"] else None
+            })
             return {
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
@@ -90,7 +104,21 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         
         # Handle callback queries (button presses)
         if "callback_query" in body:
-            return handle_callback_query(body["callback_query"])
+            callback = body["callback_query"]
+            user = callback["from"]
+            chat = callback["message"]["chat"]
+            
+            # Enhanced logging for callback queries
+            logger.info("Received callback query", extra={
+                "user_id": str(user["id"]),
+                "username": user.get("username"),
+                "chat_id": str(chat["id"]),
+                "chat_type": chat.get("type", "private"),
+                "callback_data": callback["data"],
+                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+            })
+            
+            return handle_callback_query(callback)
             
         # Handle text messages
         if "message" in body:
@@ -145,41 +173,9 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Admin commands
         if command == "/allow" and is_admin(user_id):
-            if not args or len(args) != 2 or args[1] not in ["user", "partner", "group"]:
-                return telegram.send_message(
-                    chat_id=chat_id,
-                    text=(
-                        "Usage: /allow <user_id> <type>\n"
-                        "Types: user, partner, group\n\n"
-                        "Examples:\n"
-                        "/allow 123456 user\n"
-                        "/allow 789012 partner\n"
-                        "/allow -100123456789 group"
-                    )
-                )
-            target_id, user_type = args
-            auth.add_allowed_user(target_id, user_type, user_id)
-            return telegram.send_message(
-                chat_id=chat_id,
-                text=f"✅ Added {target_id} as {user_type}"
-            )
-            
+            return handle_allow_command(user_id, chat_id, args)
         elif command == "/revoke" and is_admin(user_id):
-            if not args:
-                return telegram.send_message(
-                    chat_id=chat_id,
-                    text=(
-                        "Usage: /revoke <user_id>\n\n"
-                        "Example:\n"
-                        "/revoke 123456"
-                    )
-                )
-            target_id = args[0]
-            auth.remove_allowed_user(target_id)
-            return telegram.send_message(
-                chat_id=chat_id,
-                text=f"✅ Removed {target_id} from allow list"
-            )
+            return handle_revoke_command(user_id, chat_id, args)
             
         # Regular commands
         if command == "/start":
@@ -226,435 +222,6 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "statusCode": 200,  # Keep 200 for other errors to avoid infinite retries
             "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
-                "ok": False,
-                "error_code": 500,
-                "description": str(e)
-            }),
-            "isBase64Encoded": False
-        }
-
-def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle callback queries from inline keyboards."""
-    try:
-        chat_id = str(callback_query["message"]["chat"]["id"])
-        user_id = str(callback_query["from"]["id"])
-        data = json.loads(callback_query["data"])
-        
-        if data["action"] == "rate":
-            return handle_rating(
-                user_id,
-                chat_id,
-                data["recommendation_id"],
-                data["value"]
-            )
-        
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "ok": False,
-                "error_code": 400,
-                "description": "Invalid callback action"
-            }),
-            "isBase64Encoded": False
-        }
-        
-    except Exception as e:
-        logger.exception("Error handling callback query")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
-
-def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
-    """Handle /start command."""
-    welcome_text = (
-        "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
-        "You can use these commands:\n"
-        "/register YYYY-MM-DD - Register a cycle event\n"
-        "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
-        "/phase - View your current phase\n"
-        "/predict - View next cycle prediction\n"
-        "/statistics - View your cycle statistics"
-    )
-    
-    telegram.send_message(
-        chat_id=chat_id,
-        text=welcome_text
-    )
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json"
-        },
-        "body": json.dumps({"ok": True, "result": True}),
-        "isBase64Encoded": False
-    }
-
-def handle_register_event(
-    user_id: str,
-    chat_id: str,
-    date_str: str,
-    args: List[str] = []
-) -> Dict[str, Any]:
-    """Handle /register command with optional date range."""
-    if len(args) >= 3 and args[1].lower() == "to":
-        # Handle date range
-        end_date_str = args[2]
-        
-        start_date = validate_date(date_str)
-        end_date = validate_date(end_date_str)
-        
-        if not start_date or not end_date:
-            telegram.send_message(
-                chat_id=chat_id,
-                text="Invalid date format. Use: /register YYYY-MM-DD to YYYY-MM-DD"
-            )
-            return {
-                "statusCode": 200,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({
-                    "ok": False,
-                    "error_code": 400,
-                    "description": "Invalid date format"
-                }),
-                "isBase64Encoded": False
-            }
-            
-        is_valid, error_msg = validate_date_range(start_date, end_date)
-        if not is_valid:
-            telegram.send_message(
-                chat_id=chat_id,
-                text=f"Invalid date range: {error_msg}"
-            )
-            return {
-                "statusCode": 200,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({
-                    "ok": False,
-                    "error_code": 400,
-                    "description": error_msg
-                }),
-                "isBase64Encoded": False
-            }
-            
-        # Generate and store events for each date in range
-        dates = generate_dates_in_range(start_date, end_date)
-        for date_obj in dates:
-            event = CycleEvent(
-                user_id=user_id,
-                date=date_obj.date(),
-                state="menstruation"  # Default to menstruation event
-            )
-            
-            # Convert date to ISO string format for DynamoDB storage
-            event_data = event.model_dump()
-            event_data['date'] = event_data['date'].isoformat()
-            
-            # Store in DynamoDB
-            dynamo.put_item({
-                "PK": create_pk(user_id),
-                "SK": create_event_sk(date_obj.strftime("%Y-%m-%d")),
-                **event_data
-            })
-        
-        telegram.send_message(
-            chat_id=chat_id,
-            text=f"✅ Events registered for range {date_str} to {end_date_str}"
-        )
-        
-    else:
-        # Handle single date
-        date_obj = validate_date(date_str)
-        if not date_obj:
-            telegram.send_message(
-                chat_id=chat_id,
-                text="Invalid date. Use YYYY-MM-DD format"
-            )
-            return {
-                "statusCode": 200,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({
-                    "ok": False,
-                    "error_code": 400,
-                    "description": "Invalid date format"
-                }),
-                "isBase64Encoded": False
-            }
-        
-        event = CycleEvent(
-            user_id=user_id,
-            date=date_obj.date(),
-            state="menstruation"  # Default to menstruation event
-        )
-        
-        # Convert date to ISO string format for DynamoDB storage
-        event_data = event.model_dump()
-        event_data['date'] = event_data['date'].isoformat()
-        
-        # Store in DynamoDB
-        dynamo.put_item({
-            "PK": create_pk(user_id),
-            "SK": create_event_sk(date_str),
-            **event_data
-        })
-        
-        telegram.send_message(
-            chat_id=chat_id,
-            text=f"✅ Event registered for {date_str}"
-        )
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json"
-        },
-        "body": json.dumps({
-            "ok": True,
-            "result": {"message": "Event registered"}
-        }),
-        "isBase64Encoded": False
-    }
-
-def handle_phase_command(user_id: str, chat_id: str) -> Dict[str, Any]:
-    """Handle /fase command."""
-    # Get user's events
-    events = dynamo.query_items(
-        partition_key="PK",
-        partition_value=create_pk(user_id)
-    )
-    
-    if not events:
-        telegram.send_message(
-            chat_id=chat_id,
-            text="No events registered. Use /register to start."
-        )
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "ok": False,
-                "error_code": 404,
-                "description": "No events found"
-            }),
-            "isBase64Encoded": False
-        }
-    
-    # Convert to CycleEvent objects
-    cycle_events = [
-        CycleEvent(**event)
-        for event in events
-        if event["SK"].startswith("EVENT#")
-    ]
-    
-    # Get current phase
-    current_phase = get_current_phase(cycle_events)
-    
-    # Generate and send report
-    report = generate_phase_report(current_phase, cycle_events)
-    telegram.send_phase_report(chat_id, report)
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json"
-        },
-        "body": json.dumps({
-            "ok": True,
-            "result": {"message": "Phase report sent"}
-        }),
-        "isBase64Encoded": False
-    }
-
-def handle_statistics_command(user_id: str, chat_id: str) -> Dict[str, Any]:
-    """Handle /statistics command."""
-    from src.handlers.statistics import calculate_cycle_statistics, calculate_phase_statistics
-    
-    # Get user's events
-    events = dynamo.query_items(
-        partition_key="PK",
-        partition_value=create_pk(user_id)
-    )
-    
-    if not events:
-        telegram.send_message(
-            chat_id=chat_id,
-            text="No cycle data found. Use /register to start tracking."
-        )
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
-                "ok": False,
-                "error_code": 404,
-                "description": "No events found"
-            })
-        }
-    
-    # Convert to CycleEvent objects
-    cycle_events = [
-        CycleEvent(**event)
-        for event in events
-        if event["SK"].startswith("EVENT#")
-    ]
-    
-    # Calculate statistics
-    cycle_stats = calculate_cycle_statistics(cycle_events)
-    phase_stats = calculate_phase_statistics(cycle_events)
-    
-    # Format message
-    message = [
-        "📊 Your Cycle Statistics",
-        "------------------------",
-        f"Total cycles tracked: {cycle_stats['total_cycles']}",
-        f"Average cycle length: {round(cycle_stats['average_cycle_length'], 1)} days",
-        f"Shortest cycle: {cycle_stats['min_cycle_length']} days",
-        f"Longest cycle: {cycle_stats['max_cycle_length']} days",
-        "",
-        "📈 Phase Statistics:",
-    ]
-    
-    for phase, stats in phase_stats.items():
-        phase_info = [
-            f"\n{phase.title()}:",
-            f"• Average duration: {round(stats['average_duration'], 1)} days",
-            f"• Occurrences: {stats['occurrence_count']} times"
-        ]
-        
-        if stats['average_pain_level'] is not None:
-            phase_info.append(f"• Average pain level: {round(stats['average_pain_level'], 1)}/5")
-        if stats['average_energy_level'] is not None:
-            phase_info.append(f"• Average energy level: {round(stats['average_energy_level'], 1)}/5")
-            
-        message.extend(phase_info)
-    
-    telegram.send_message(
-        chat_id=chat_id,
-        text="\n".join(message)
-    )
-    
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps({
-            "ok": True,
-            "result": {"message": "Statistics sent"}
-        })
-    }
-
-def handle_prediction_command(user_id: str, chat_id: str) -> Dict[str, Any]:
-    """Handle /prediccion command."""
-    # Get user's events
-    events = dynamo.query_items(
-        partition_key="PK",
-        partition_value=create_pk(user_id)
-    )
-    
-    if not events:
-        telegram.send_message(
-            chat_id=chat_id,
-            text="Not enough data to make a prediction."
-        )
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "ok": False,
-                "error_code": 404,
-                "description": "No events found"
-            }),
-            "isBase64Encoded": False
-        }
-    
-    # Convert to CycleEvent objects
-    cycle_events = [
-        CycleEvent(**event)
-        for event in events
-        if event["SK"].startswith("EVENT#")
-    ]
-    
-    # Calculate prediction
-    next_date, duration, warning = calculate_next_cycle(cycle_events)
-    
-    message = [
-        f"🔮 Next expected cycle: {next_date}",
-        f"📊 Average duration: {duration} days",
-    ]
-    
-    if warning:
-        message.append(f"⚠️ {warning}")
-    
-    telegram.send_message(
-        chat_id=chat_id,
-        text="\n".join(message)
-    )
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json"
-        },
-        "body": json.dumps({
-            "ok": True,
-            "result": {"message": "Prediction sent"}
-        }),
-        "isBase64Encoded": False
-    }
-
-def handle_rating(
-    user_id: str,
-    chat_id: str,
-    recommendation_id: str,
-    rating: int
-) -> Dict[str, Any]:
-    """Handle recommendation rating callback."""
-    try:
-        # Update recommendation in DynamoDB
-        dynamo.update_item(
-            key={
-                "PK": create_pk(user_id),
-                "SK": f"REC#{recommendation_id}"
-            },
-            update_expression="SET effectiveness_rating = :r",
-            expression_values={":r": rating}
-        )
-        
-        telegram.send_message(
-            chat_id=chat_id,
-            text=f"Thanks for your rating! ({rating}⭐)"
-        )
-        
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "ok": True,
-                "result": {"message": "Rating recorded"}
-            }),
-            "isBase64Encoded": False
-        }
-        
-    except Exception as e:
-        logger.exception("Error recording rating")
-        telegram.send_message(
-            chat_id=chat_id,
-            text=format_error_message(e)
-        )
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
             "body": json.dumps({
                 "ok": False,
                 "error_code": 500,
