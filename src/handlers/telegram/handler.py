@@ -23,7 +23,8 @@ from .commands import (
     handle_register_event,
     handle_phase_command,
     handle_prediction_command,
-    handle_statistics_command
+    handle_statistics_command,
+    handle_weeklyplan_command
 )
 from .callbacks import handle_callback_query
 
@@ -192,6 +193,9 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
             
         elif command == "/statistics":
             return handle_statistics_command(user_id, chat_id)
+            
+        elif command == "/weeklyplan":
+            return handle_weeklyplan_command(message)
             
         else:
             return telegram.send_message(
