@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType
 from src.services.phase import get_current_phase, predict_next_phase, determine_functional_phase
+from src.services.cycle import calculate_next_cycle
 
 def test_phase_detection():
     """Test phase detection and mapping to functional phases."""
@@ -137,3 +138,67 @@ def test_report_generation():
     assert "⏱️ Fasting Protocol" in report
     assert phase.fasting_protocol in report
     assert "Started period" in report
+
+def test_prediction_with_recent_longer_cycles():
+    """Test prediction when recent cycles are longer than historical ones."""
+    # Test case matching the reported scenario
+    events = [
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 6, 16),
+            state="menstruation",
+            pain_level=3
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 7, 22),
+            state="menstruation",
+            pain_level=3
+        )
+    ]
+    
+    next_date, duration, warning = calculate_next_cycle(events)
+    
+    # Should predict 36 days after July 22 (around Aug 23)
+    assert next_date == date(2025, 8, 27)
+    assert duration == 36  # The interval between June 16 and July 22
+    assert warning == "Limited data for prediction, using most recent cycle length"
+
+def test_prediction_with_mixed_cycle_lengths():
+    """Test prediction with historical shorter cycles but recent longer cycles."""
+    events = [
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 4, 1),
+            state="menstruation",
+            pain_level=3
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 4, 28),
+            state="menstruation",
+            pain_level=3
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 6, 16),
+            state="menstruation",
+            pain_level=3
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 7, 22),
+            state="menstruation",
+            pain_level=3
+        )
+    ]
+    
+    next_date, duration, warning = calculate_next_cycle(events)
+    
+    # Should weight recent cycles more heavily
+    # Earlier cycles: 27 days (Apr 1 -> Apr 28)
+    # Middle cycle: 49 days (Apr 28 -> Jun 16)
+    # Latest cycle: 36 days (Jun 16 -> Jul 22)
+    # With exponential weights (4,2,1), should predict closer to recent cycles
+    assert next_date > date(2025, 8, 15)  # Should be closer to Aug 23 than Aug 1
+    assert warning == "Irregular cycle detected"  # Should detect irregularity due to varying lengths

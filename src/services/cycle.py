@@ -67,14 +67,22 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
         interval = (menstruation_events[i].date - menstruation_events[i-1].date).days
         intervals.append(interval)
     
-    avg_duration = round(mean(intervals))
-    
-    # Check for cycle irregularity
-    warning = None
+    # Calculate weighted average giving more importance to recent cycles
     if len(intervals) >= 3:
+        # Use exponential weights to give more importance to recent intervals
+        # Generate weights in reverse order so most recent interval gets highest weight
+        weights = [2**i for i in range(len(intervals)-1, -1, -1)]
+        weighted_sum = sum(interval * weight for interval, weight in zip(intervals, weights))
+        total_weight = sum(weights)
+        avg_duration = round(weighted_sum / total_weight)
+        
+        # Check for cycle irregularity
         cycle_stddev = stdev(intervals)
-        if cycle_stddev > 10:  # More than 10 days variation
-            warning = "Irregular cycle detected"
+        warning = "Irregular cycle detected" if cycle_stddev > 10 else None
+    else:
+        # If we have less than 3 intervals, use the most recent one
+        avg_duration = intervals[-1]
+        warning = "Limited data for prediction, using most recent cycle length"
     
     last_date = menstruation_events[-1].date
     next_date = last_date + timedelta(days=avg_duration)
