@@ -15,8 +15,7 @@ from aws_lambda_powertools import Logger
 from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
 from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
-from src.utils.auth import AuthorizationError
-from src.utils.clients import get_telegram, get_all_clients
+from src.utils.clients import get_telegram, get_dynamo, get_clients
 
 logger = Logger()
 
@@ -27,15 +26,14 @@ def handle_weeklyplan_command(
     """
     Handle /weeklyplan command to generate an on-demand weekly plan.
 
-    This handler validates user authorization, retrieves their cycle events,
-    and generates a personalized weekly plan on demand.
+    This handler retrieves cycle events and generates a personalized
+    weekly plan on demand.
 
     Args:
         update: Telegram update object containing message and user info
         context: Optional context for the command handler
 
     Raises:
-        AuthorizationError: If user is not authorized
         ValueError: If no cycle events are found
         Exception: For unexpected errors during plan generation
     """
@@ -47,21 +45,8 @@ def handle_weeklyplan_command(
         "chat_id": chat_id
     })
 
-    # Get required clients first
-    dynamo, telegram, auth = get_all_clients()
-
-    # Handle authorization first
-    try:
-        auth.check_user_authorized(user_id)
-    except AuthorizationError as e:
-        logger.warning("Unauthorized weeklyplan access attempt", extra={
-            "user_id": user_id
-        })
-        telegram.send_message(
-            chat_id=chat_id,
-            text=f"⚠️ {str(e)}"
-        )
-        return
+    # Get clients lazily
+    dynamo, telegram = get_clients()
 
     try:
         # Get user's events
@@ -110,8 +95,7 @@ def handle_weeklyplan_command(
             "Error generating weekly plan",
             extra={
                 "user_id": user_id,
-                "error_type": e.__class__.__name__,
-                "is_auth_error": isinstance(e, AuthorizationError)
+                "error_type": e.__class__.__name__
             }
         )
         telegram.send_message(

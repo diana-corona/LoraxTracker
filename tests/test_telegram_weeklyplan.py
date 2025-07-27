@@ -6,46 +6,11 @@ import logging
 
 from src.handlers.telegram.commands.weeklyplan import handle_weeklyplan_command
 from src.models.phase import TraditionalPhaseType
-from src.utils.auth import Authorization, AuthorizationError
 
 @pytest.fixture(autouse=True)
 def setup_logging():
     """Set up logging for tests."""
     logging.basicConfig(level=logging.INFO)
-
-def test_weeklyplan_command_unauthorized(caplog):
-    """Test weeklyplan command with unauthorized user."""
-    # Mock update data
-    update = {
-        "message": {
-            "chat": {"id": "123"},
-            "from": {"id": "456"}
-        }
-    }
-    
-    # Mock auth with unauthorized result
-    mock_auth = Authorization(None, mock_result=False)
-
-    # Mock other dependencies
-    mock_telegram = Mock()
-    mock_telegram.send_message = Mock()
-    mock_dynamo = Mock()
-    mock_dynamo.query_items.return_value = []
-
-    # Patch both the individual client getters and get_all_clients
-    with patch('src.utils.clients._dynamo', mock_dynamo), \
-         patch('src.utils.clients._telegram', mock_telegram), \
-         patch('src.utils.clients._auth', mock_auth), \
-         patch('src.utils.clients.get_all_clients', return_value=(mock_dynamo, mock_telegram, mock_auth)):
-        
-            # Execute command - should handle AuthorizationError internally
-            handle_weeklyplan_command(update)
-            
-            # Verify error message was sent
-            mock_telegram.send_message.assert_called_once_with(
-                chat_id="123",
-                text="⚠️ You are not authorized to use this command."
-            )
 
 def test_weeklyplan_command_no_events():
     """Test weeklyplan command when user has no events."""
@@ -57,20 +22,16 @@ def test_weeklyplan_command_no_events():
         }
     }
     
-    # Mock auth with authorized result
-    mock_auth = Authorization(None, mock_result=True)
-
-    # Mock other dependencies
+    # Mock dependencies
     mock_telegram = Mock()
     mock_telegram.send_message = Mock()
     mock_dynamo = Mock()
     mock_dynamo.query_items.return_value = []
     
-    # Patch both the individual client getters and get_all_clients
+    # Patch clients
     with patch('src.utils.clients._dynamo', mock_dynamo), \
          patch('src.utils.clients._telegram', mock_telegram), \
-         patch('src.utils.clients._auth', mock_auth), \
-         patch('src.utils.clients.get_all_clients', return_value=(mock_dynamo, mock_telegram, mock_auth)):
+         patch('src.utils.clients.get_clients', return_value=(mock_dynamo, mock_telegram)):
         mock_dynamo.query_items.return_value = []
         
         # Execute command
@@ -104,20 +65,16 @@ def test_weeklyplan_command_success():
         }
     ]
     
-    # Mock auth with authorized result
-    mock_auth = Authorization(None, mock_result=True)
-
-    # Mock other dependencies
+    # Mock dependencies
     mock_telegram = Mock()
     mock_telegram.send_message = Mock()
     mock_dynamo = Mock()
     mock_dynamo.query_items.return_value = mock_events
     
-    # Patch both the individual client getters and get_all_clients
+    # Patch clients
     with patch('src.utils.clients._dynamo', mock_dynamo), \
          patch('src.utils.clients._telegram', mock_telegram), \
-         patch('src.utils.clients._auth', mock_auth), \
-         patch('src.utils.clients.get_all_clients', return_value=(mock_dynamo, mock_telegram, mock_auth)):
+         patch('src.utils.clients.get_clients', return_value=(mock_dynamo, mock_telegram)):
         mock_dynamo.query_items.return_value = mock_events
         
         # Execute command
@@ -142,20 +99,16 @@ def test_weeklyplan_command_unexpected_error():
         }
     }
     
-    # Mock auth with authorized result
-    mock_auth = Authorization(None, mock_result=True)
-
-    # Mock other dependencies
+    # Mock dependencies
     mock_telegram = Mock()
     mock_telegram.send_message = Mock()
     mock_dynamo = Mock()
     mock_dynamo.query_items.side_effect = Exception("Unexpected error")
     
-    # Patch both the individual client getters and get_all_clients
+    # Patch clients
     with patch('src.utils.clients._dynamo', mock_dynamo), \
          patch('src.utils.clients._telegram', mock_telegram), \
-         patch('src.utils.clients._auth', mock_auth), \
-         patch('src.utils.clients.get_all_clients', return_value=(mock_dynamo, mock_telegram, mock_auth)):
+         patch('src.utils.clients.get_clients', return_value=(mock_dynamo, mock_telegram)):
         mock_dynamo.query_items.side_effect = Exception("Unexpected error")
         
         # Execute command
