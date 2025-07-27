@@ -18,8 +18,7 @@ START_MESSAGE_PRIVATE = (
     "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
     "/phase - View your current phase\n"
     "/predict - View next cycle prediction\n"
-    "/statistics - View your cycle statistics\n"
-    "/mygroups - View your groups and partners"
+    "/statistics - View your cycle statistics"
 )
 
 START_MESSAGE_GROUP = "Hi! I'm Lorax, your weekly planner assistant. 🌙"

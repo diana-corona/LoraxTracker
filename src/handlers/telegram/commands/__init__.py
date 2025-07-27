@@ -9,7 +9,6 @@ from .statistics import handle_statistics_command
 from .weeklyplan import handle_weeklyplan_command
 from .help import handle_help_command
 from .history import handle_history_command
-from .mygroups import handle_mygroups_command
 from .select_recipes import handle_select_recipes_command
 
 __all__ = [
@@ -21,6 +20,5 @@ __all__ = [
     "handle_weeklyplan_command",
     "handle_help_command",
     "handle_history_command",
-    "handle_mygroups_command",
     "handle_select_recipes_command"
 ]

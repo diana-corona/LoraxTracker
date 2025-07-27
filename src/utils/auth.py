@@ -7,10 +7,6 @@ from datetime import datetime
 
 from src.utils.dynamo import DynamoDBClient
 
-class AuthorizationError(Exception):
-    """Raised when user is not authorized."""
-    pass
-
 class Authorization:
     """Authorization utility class."""
     
@@ -49,31 +45,24 @@ class Authorization:
             user_id: Telegram user ID
             
         Returns:
-            bool: True if user is authorized
-            
-        Raises:
-            AuthorizationError: If user is not authorized
+            bool: True if user is authorized, False otherwise
         """
         # Handle mock result first to prevent any DynamoDB interactions in test mode
         if self._mock_result is not None:
-            if not self._mock_result:
-                raise AuthorizationError("You are not authorized to use this command.")
-            return True
+            return self._mock_result
 
         try:
             # Only try to use DynamoDB if we have a client
             if not self.dynamo:
-                raise AuthorizationError("You are not authorized to use this command.")
+                return False
 
             allowed_user = self.dynamo.get_item({
                 "PK": f"ALLOWED_USER#{user_id}",
                 "SK": "METADATA"
             })
-            if not allowed_user or allowed_user.get("status") != "active":
-                raise AuthorizationError("You are not authorized to use this command.")
-            return True
+            return bool(allowed_user and allowed_user.get("status") == "active")
         except Exception:
-            raise AuthorizationError("You are not authorized to use this command.")
+            return False
     
     def add_allowed_user(
         self,
