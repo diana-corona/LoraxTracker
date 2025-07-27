@@ -8,14 +8,31 @@ def parse_command(text: str) -> tuple[str, List[str]]:
     """
     Parse command and arguments from message text.
     
+    Handles both direct commands (/start) and group commands with bot username
+    (/start@BotUsername). The @BotUsername suffix is stripped from the command
+    for consistent handling.
+    
     Args:
-        text: Raw message text
-        
+        text: Raw message text from Telegram update
+            Examples:
+                "/start"
+                "/start@MyBot argument1 argument2"
+                "/help@BotUsername"
+    
     Returns:
-        Tuple of (command, arguments)
+        Tuple of (command, arguments) where:
+            - command is the normalized command string (e.g., "/start")
+            - arguments is a list of argument strings
+    
+    Example:
+        >>> parse_command("/start@MyBot arg1")
+        ("/start", ["arg1"])
+        >>> parse_command("/help")
+        ("/help", [])
     """
     parts = text.split()
-    command = parts[0].lower()
+    # Extract and normalize command by removing any @BotUsername suffix
+    command = parts[0].lower().split('@')[0]
     args = parts[1:] if len(parts) > 1 else []
     
     return command, args
