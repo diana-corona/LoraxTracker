@@ -1,6 +1,7 @@
 """
 Constants and shared data for cycle-related services.
 """
+from typing import Dict, List, Set
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType
 
 TRADITIONAL_PHASE_RECOMMENDATIONS = {
@@ -266,6 +267,14 @@ PHASE_INGREDIENTS = {
     }
 }
 
+# Meal type icons
+MEAL_ICONS = {
+    "breakfast": "🥞",
+    "lunch": "🥗",
+    "dinner": "🍽️",
+    "snack": "🍿"
+}
+
 # Shopping list category icons
 SHOPPING_ICONS = {
     "proteins": "🥩",
@@ -274,5 +283,47 @@ SHOPPING_ICONS = {
     "fats": "🥑",
     "carbohydrates": "🌾",
     "supplements": "💊",
-    "others": "🧂"
+    "others": "🧂",
+    "pantry": "🥫",
+    "basic": "📝"
+}
+
+# Common household ingredients that are assumed to be available
+BASIC_INGREDIENTS: Set[str] = {
+    # Seasonings
+    "salt",
+    "black pepper",
+    "ground pepper",
+    "pepper",
+    
+    # Oils
+    "olive oil",
+    "vegetable oil",
+    "cooking oil",
+    "oil",
+    
+    # Basic liquids
+    "water",
+    "ice water",
+    "hot water",
+    
+    # Common spices
+    "garlic powder",
+    "onion powder",
+    "paprika",
+    "dried oregano",
+    "dried basil",
+    "ground cinnamon",
+    
+    # Basic condiments
+    "mayonnaise",
+    "mustard",
+    "ketchup",
+    
+    # Pantry staples
+    "flour",
+    "sugar",
+    "baking powder",
+    "baking soda",
+    "vanilla extract"
 }

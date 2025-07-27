@@ -17,11 +17,12 @@ except ImportError:
 from src.models.event import CycleEvent
 from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.weekly_plan import WeeklyPlan, PhaseGroup, PhaseRecommendations
-from src.services.constants import TRADITIONAL_PHASE_RECOMMENDATIONS
+from src.services.constants import TRADITIONAL_PHASE_RECOMMENDATIONS, MEAL_ICONS
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
 from src.services.phase import get_phase_details, predict_next_phase
 from src.services.recipe import RecipeService
 from src.models.recipe import MealRecommendation
+from src.services.recipe_selection import RecipeSelectionService, MealSelection
 
 
 def get_phase_emoji(phase: FunctionalPhaseType) -> str:
@@ -51,9 +52,20 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
         # Get recipe recommendations for this phase
         recipe_recs = recipe_service.get_recipe_recommendations(phase_type)
         
-        # Format recipe suggestions for display
+        # Format recipe suggestions and generate shopping list
         recipe_suggestions = format_recipe_suggestions(recipe_recs.meals)
         meal_plan_preview = create_meal_plan_preview(recipe_recs.meals)
+        
+        # Generate shopping list using RecipeSelectionService
+        meal_selections = [
+            MealSelection(
+                meal_type=meal.meal_type,
+                recipe=meal.recipes[0]  # Use first recipe as default selection
+            )
+            for meal in recipe_recs.meals
+        ]
+        shopping_list = RecipeSelectionService.generate_shopping_list(meal_selections)
+        formatted_shopping_list = RecipeSelectionService.format_shopping_list(shopping_list)
         
         return PhaseRecommendations(
             fasting_protocol=phase_details["fasting_protocol"],
@@ -63,7 +75,7 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
             # Enhanced recipe fields
             recipe_suggestions=recipe_suggestions,
             meal_plan_preview=meal_plan_preview,
-            shopping_preview=recipe_recs.shopping_list_preview[:5]  # Top 5 ingredients
+            shopping_preview=formatted_shopping_list.splitlines()[:5]  # Top 5 lines of shopping list
         )
         
     except Exception as e:
@@ -84,63 +96,56 @@ def format_recipe_suggestions(meals: List[MealRecommendation]) -> List[Dict[str,
         meals: List of meal recommendations
         
     Returns:
-        List of formatted recipe suggestions
+        List of formatted recipe suggestions using markdown links
     """
-    suggestions = []
+    # Use RecipeSelectionService to format recipe options with embedded URLs
+    formatted_text = RecipeSelectionService.format_recipe_options(meals)
     
+    # Convert to dict format for consistency with existing code
+    suggestions = []
     for meal in meals:
         meal_data = {
             "meal_type": meal.meal_type,
-            "recipes": [],
-            "total_prep_time": meal.prep_time_total
-        }
-        
-        for recipe in meal.recipes:
-            meal_data["recipes"].append({
+            "recipes": [{
                 "title": recipe.title,
                 "prep_time": recipe.prep_time,
                 "tags": recipe.tags,
-                "url": recipe.url
-            })
-        
+                "url": recipe.url,
+                "formatted_text": f"[{recipe.title}]({recipe.url})" if recipe.url else recipe.title
+            } for recipe in meal.recipes],
+            "total_prep_time": meal.prep_time_total
+        }
         suggestions.append(meal_data)
     
     return suggestions
 
 def create_meal_plan_preview(meals: List[MealRecommendation]) -> List[str]:
     """
-    Generate human-readable meal plan preview strings.
+    Generate human-readable meal plan preview strings with embedded URLs.
     
     Args:
         meals: List of meal recommendations
         
     Returns:
-        List of formatted meal plan strings
+        List of formatted meal plan strings with clickable recipe links
     """
     preview = []
-    
-    # Meal type emojis
-    meal_emojis = {
-        "breakfast": "🥞",
-        "lunch": "🥗", 
-        "dinner": "🍽️",
-        "snack": "🍿",
-        "general": "🍴"
-    }
-    
     for meal in meals:
-        emoji = meal_emojis.get(meal.meal_type, "🍴")
+        emoji = MEAL_ICONS.get(meal.meal_type.lower(), "🍴")
         
         if len(meal.recipes) == 1:
             recipe = meal.recipes[0]
-            url_text = f" - {recipe.url}" if recipe.url else ""
-            preview.append(f"{emoji} {meal.meal_type.title()}: {recipe.title} ({recipe.prep_time} min){url_text}")
+            url_part = f"]({recipe.url})" if recipe.url else "]"
+            preview.append(
+                f"{emoji} {meal.meal_type.title()}: [{recipe.title}{url_part} "
+                f"({recipe.prep_time} min)"
+            )
         else:
             # Multiple recipes for this meal type
             recipe_texts = []
             for r in meal.recipes:
-                url_text = f" - {r.url}" if r.url else ""
-                recipe_texts.append(f"{r.title} ({r.prep_time} min){url_text}")
+                url_part = f"]({r.url})" if r.url else "]"
+                recipe_texts.append(f"[{r.title}{url_part} ({r.prep_time} min)")
             preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_texts)}")
     
     return preview
