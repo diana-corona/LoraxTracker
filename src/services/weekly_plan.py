@@ -2,15 +2,25 @@
 Service module for generating weekly cycle plans.
 """
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import date, timedelta
+
+try:
+    from aws_lambda_powertools import Logger
+    logger = Logger()
+except ImportError:
+    # Fallback for local testing without aws_lambda_powertools
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
 from src.models.event import CycleEvent
 from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.weekly_plan import WeeklyPlan, PhaseGroup, PhaseRecommendations
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
-
 from src.services.phase import get_phase_details, predict_next_phase
+from src.services.recipe import RecipeService
+from src.models.recipe import MealRecommendation
 
 
 def get_phase_emoji(phase: FunctionalPhaseType) -> str:
@@ -22,14 +32,113 @@ def get_phase_emoji(phase: FunctionalPhaseType) -> str:
     }
     return emoji_map[phase]
 
-def create_phase_recommendations(phase_details: Dict) -> PhaseRecommendations:
-    """Create phase recommendations from phase details."""
-    return PhaseRecommendations(
-        fasting_protocol=phase_details["fasting_protocol"],
-        foods=phase_details["food_recommendations"][:3],  # Top 3 food recommendations
-        activities=phase_details["activity_recommendations"][:3],  # Top 3 activities
-        supplements=phase_details.get("supplement_recommendations")
-    )
+def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhaseType) -> PhaseRecommendations:
+    """
+    Create enhanced phase recommendations with recipes.
+    
+    Args:
+        phase_details: Traditional phase details from phase service
+        phase_type: Functional phase type for recipe recommendations
+        
+    Returns:
+        Enhanced PhaseRecommendations with recipe suggestions
+    """
+    try:
+        # Initialize recipe service
+        recipe_service = RecipeService()
+        
+        # Get recipe recommendations for this phase
+        recipe_recs = recipe_service.get_recipe_recommendations(phase_type)
+        
+        # Format recipe suggestions for display
+        recipe_suggestions = format_recipe_suggestions(recipe_recs.meals)
+        meal_plan_preview = create_meal_plan_preview(recipe_recs.meals)
+        
+        return PhaseRecommendations(
+            fasting_protocol=phase_details["fasting_protocol"],
+            foods=phase_details["food_recommendations"][:3],  # Top 3 food recommendations
+            activities=phase_details["activity_recommendations"][:3],  # Top 3 activities
+            supplements=phase_details.get("supplement_recommendations"),
+            # Enhanced recipe fields
+            recipe_suggestions=recipe_suggestions,
+            meal_plan_preview=meal_plan_preview,
+            shopping_preview=recipe_recs.shopping_list_preview[:5]  # Top 5 ingredients
+        )
+        
+    except Exception as e:
+        logger.warning(f"Failed to load recipes for {phase_type.value} phase: {str(e)}")
+        # Graceful fallback - return basic recommendations without recipes
+        return PhaseRecommendations(
+            fasting_protocol=phase_details["fasting_protocol"],
+            foods=phase_details["food_recommendations"][:3],
+            activities=phase_details["activity_recommendations"][:3],
+            supplements=phase_details.get("supplement_recommendations")
+        )
+
+def format_recipe_suggestions(meals: List[MealRecommendation]) -> List[Dict[str, Any]]:
+    """
+    Convert MealRecommendation objects to dict format for display.
+    
+    Args:
+        meals: List of meal recommendations
+        
+    Returns:
+        List of formatted recipe suggestions
+    """
+    suggestions = []
+    
+    for meal in meals:
+        meal_data = {
+            "meal_type": meal.meal_type,
+            "recipes": [],
+            "total_prep_time": meal.prep_time_total
+        }
+        
+        for recipe in meal.recipes:
+            meal_data["recipes"].append({
+                "title": recipe.title,
+                "prep_time": recipe.prep_time,
+                "tags": recipe.tags,
+                "url": recipe.url
+            })
+        
+        suggestions.append(meal_data)
+    
+    return suggestions
+
+def create_meal_plan_preview(meals: List[MealRecommendation]) -> List[str]:
+    """
+    Generate human-readable meal plan preview strings.
+    
+    Args:
+        meals: List of meal recommendations
+        
+    Returns:
+        List of formatted meal plan strings
+    """
+    preview = []
+    
+    # Meal type emojis
+    meal_emojis = {
+        "breakfast": "🥞",
+        "lunch": "🥗", 
+        "dinner": "🍽️",
+        "snack": "🍿",
+        "general": "🍴"
+    }
+    
+    for meal in meals:
+        emoji = meal_emojis.get(meal.meal_type, "🍴")
+        
+        if len(meal.recipes) == 1:
+            recipe = meal.recipes[0]
+            preview.append(f"{emoji} {meal.meal_type.title()}: {recipe.title} ({recipe.prep_time} min)")
+        else:
+            # Multiple recipes for this meal type
+            recipe_titles = [f"{r.title} ({r.prep_time} min)" for r in meal.recipes]
+            preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_titles)}")
+    
+    return preview
 
 def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup]:
     """Group consecutive days with the same phase."""
@@ -52,7 +161,7 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
                 "start": day,
                 "end": day,
                 "functional_phase": phase.functional_phase,
-                "recommendations": create_phase_recommendations(details)
+                "recommendations": create_phase_recommendations(details, phase.functional_phase)
             }
         else:
             current_group["end"] = day
@@ -172,7 +281,17 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
             f"({group.traditional_phase.value.title()})",
             f"⏱️ Fasting: {group.recommendations.fasting_protocol}",
             "🥗 Key Foods:",
-            *[f"  - {food}" for food in group.recommendations.foods],
+            *[f"  - {food}" for food in group.recommendations.foods]
+        ])
+        
+        # Add recipe suggestions if available
+        if group.recommendations.meal_plan_preview:
+            formatted.extend([
+                "🍽️ Suggested Meals:",
+                *[f"  {meal}" for meal in group.recommendations.meal_plan_preview]
+            ])
+        
+        formatted.extend([
             "💪 Activities:",
             *[f"  - {activity}" for activity in group.recommendations.activities]
         ])
@@ -181,6 +300,13 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
             formatted.extend([
                 "💊 Supplements:",
                 *[f"  - {supp}" for supp in group.recommendations.supplements]
+            ])
+        
+        # Add shopping preview if available
+        if group.recommendations.shopping_preview:
+            formatted.extend([
+                "🛒 Key Ingredients:",
+                *[f"  • {ingredient}" for ingredient in group.recommendations.shopping_preview]
             ])
     
     return formatted
