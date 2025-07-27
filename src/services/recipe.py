@@ -3,7 +3,7 @@ Recipe service for managing recipes and their ingredients.
 """
 import os
 from typing import Dict, List, Set, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
@@ -21,13 +21,13 @@ from src.models.recipe import Recipe
 @dataclass
 class CategorizedIngredients:
     """Container for ingredients categorized by type."""
-    proteins: Set[str] = set()
-    produce: Set[str] = set()
-    dairy: Set[str] = set()
-    condiments: Set[str] = set()
-    baking: Set[str] = set()
-    nuts: Set[str] = set()
-    pantry: Set[str] = set()
+    proteins: Set[str] = field(default_factory=set)
+    produce: Set[str] = field(default_factory=set)
+    dairy: Set[str] = field(default_factory=set)
+    condiments: Set[str] = field(default_factory=set)
+    baking: Set[str] = field(default_factory=set)
+    nuts: Set[str] = field(default_factory=set)
+    pantry: Set[str] = field(default_factory=set)
 
 class RecipeService:
     """Service for managing recipes and their ingredients."""

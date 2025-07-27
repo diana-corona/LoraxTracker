@@ -95,3 +95,20 @@ class TelegramClient:
             chat_id=chat_id,
             text=format_recommendations(recommendations)
         )
+
+    def get_chat(self, chat_id: str) -> Dict[str, Any]:
+        """
+        Get information about a chat.
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            Chat information from Telegram API
+        """
+        response = requests.get(
+            f"{self.base_url}/getChat",
+            params={"chat_id": chat_id}
+        )
+        response.raise_for_status()
+        return response.json()["result"]

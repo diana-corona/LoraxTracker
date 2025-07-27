@@ -1,8 +1,44 @@
 """
 Keyboard layout definitions for Telegram bot interactions.
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+def create_inline_keyboard(buttons: List[List[Dict[str, str]]]) -> InlineKeyboardMarkup:
+    """
+    Create an inline keyboard from a list of button definitions.
+    
+    Args:
+        buttons: List of button rows, where each button is a dict with 'text' and 'callback_data'
+        
+    Returns:
+        InlineKeyboardMarkup with the specified buttons
+    """
+    keyboard = []
+    for row in buttons:
+        keyboard_row = []
+        for button in row:
+            keyboard_row.append(
+                InlineKeyboardButton(
+                    text=button['text'],
+                    callback_data=button['callback_data']
+                )
+            )
+        keyboard.append(keyboard_row)
+    return InlineKeyboardMarkup(keyboard)
+
+def create_rating_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create an inline keyboard for rating recipes.
+    
+    Returns:
+        InlineKeyboardMarkup with rating buttons (1-5)
+    """
+    buttons = [[{
+        'text': str(i),
+        'callback_data': f'rate_{i}'
+    } for i in range(1, 6)]]
+    return create_inline_keyboard(buttons)
 
 def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: str) -> InlineKeyboardMarkup:
     """

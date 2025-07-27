@@ -35,9 +35,23 @@ def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     dynamo, telegram = get_clients()
     try:
         # Get chat info to determine if it's a group
-        chat_info = telegram.get_chat(chat_id)
-        is_group = chat_info.get('type') in ['group', 'supergroup'] or str(chat_id).startswith('-')
-        
+        try:
+            chat_info = telegram.get_chat(chat_id)
+            # Telegram API returns chat type in the 'type' field
+            chat_type = chat_info.get('type', '')
+            is_group = chat_type in ['group', 'supergroup'] or str(chat_id).startswith('-')
+        except Exception as e:
+            logger.warning(
+                "Failed to get chat info, falling back to chat ID check",
+                extra={
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "error": str(e)
+                }
+            )
+            # Fallback: determine if group based on chat ID format
+            is_group = str(chat_id).startswith('-')
+
         # Log command usage
         logger.info(
             "Mygroups command received",
@@ -81,7 +95,9 @@ def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         if user.chat_id_group:
             try:
                 group_info = telegram.get_chat(user.chat_id_group)
-                group_name = group_info.get('title', 'Unknown Group')
+                group_name = group_info.get('title') if group_info else 'Unknown Group'
+                if not group_name:
+                    group_name = 'Unknown Group'
                 message_parts.append(f"Group Chat: {group_name}")
             except Exception as e:
                 logger.warning(
