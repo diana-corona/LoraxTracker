@@ -196,7 +196,7 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
             return handle_statistics_command(user_id, chat_id)
             
         elif command == "/weeklyplan":
-            return handle_weeklyplan_command(message)
+            return handle_weeklyplan_command(user_id, chat_id)
             
         elif command == "/help":
             return handle_help_command(user_id, chat_id)

@@ -8,6 +8,7 @@ Typical usage:
     User sends: /weeklyplan
     Bot responds with a personalized weekly plan
 """
+import json
 from typing import Optional, Dict, Any
 
 from aws_lambda_powertools import Logger
@@ -19,10 +20,7 @@ from src.utils.clients import get_telegram, get_dynamo, get_clients
 
 logger = Logger()
 
-def handle_weeklyplan_command(
-    update: Dict[str, Any],
-    context: Optional[Dict[str, Any]] = None
-) -> None:
+def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
     Handle /weeklyplan command to generate an on-demand weekly plan.
 
@@ -30,15 +28,16 @@ def handle_weeklyplan_command(
     weekly plan on demand.
 
     Args:
-        update: Telegram update object containing message and user info
-        context: Optional context for the command handler
+        user_id: The Telegram user ID
+        chat_id: The Telegram chat ID
+
+    Returns:
+        Dict containing the response status and message
 
     Raises:
         ValueError: If no cycle events are found
         Exception: For unexpected errors during plan generation
     """
-    chat_id = update["message"]["chat"]["id"]
-    user_id = str(update["message"]["from"]["id"])
     
     logger.info("Processing weeklyplan command", extra={
         "user_id": user_id,
@@ -85,6 +84,18 @@ def handle_weeklyplan_command(
             "plan_end": weekly_plan.end_date.isoformat()
         })
         
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({
+                "ok": True,
+                "result": {"message": "Weekly plan sent"}
+            }),
+            "isBase64Encoded": False
+        }
+        
     except ValueError as e:
         telegram.send_message(
             chat_id=chat_id,
@@ -102,3 +113,15 @@ def handle_weeklyplan_command(
             chat_id=chat_id,
             text="Sorry, there was an error generating your weekly plan. Please try again later."
         )
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({
+                "ok": False,
+                "error_code": 500,
+                "description": str(e)
+            }),
+            "isBase64Encoded": False
+        }

@@ -1,4 +1,5 @@
 """Tests for weeklyplan command handler."""
+import json
 from datetime import date, timedelta
 import pytest
 from unittest.mock import patch, Mock
@@ -14,13 +15,9 @@ def setup_logging():
 
 def test_weeklyplan_command_no_events():
     """Test weeklyplan command when user has no events."""
-    # Mock update data
-    update = {
-        "message": {
-            "chat": {"id": "123"},
-            "from": {"id": "456"}
-        }
-    }
+    # Test parameters
+    user_id = "456"
+    chat_id = "123"
     
     # Mock dependencies
     mock_telegram = Mock()
@@ -35,23 +32,22 @@ def test_weeklyplan_command_no_events():
         mock_dynamo.query_items.return_value = []
         
         # Execute command
-        handle_weeklyplan_command(update)
+        result = handle_weeklyplan_command(user_id, chat_id)
         
         # Verify error message sent
         mock_telegram.send_message.assert_called_once_with(
-            chat_id="123",
+            chat_id=chat_id,
             text="⚠️ No cycle events found. Please register some events first."
         )
+        
+        # Verify warning case returns no response
+        assert result is None
 
 def test_weeklyplan_command_success():
     """Test successful weeklyplan command execution."""
-    # Mock update data
-    update = {
-        "message": {
-            "chat": {"id": "123"},
-            "from": {"id": "456"}
-        }
-    }
+    # Test parameters
+    user_id = "456"
+    chat_id = "123"
     
     # Mock event data
     today = date.today()
@@ -78,26 +74,29 @@ def test_weeklyplan_command_success():
         mock_dynamo.query_items.return_value = mock_events
         
         # Execute command
-        handle_weeklyplan_command(update)
+        result = handle_weeklyplan_command(user_id, chat_id)
         
         # Verify success
         mock_telegram.send_message.assert_called_once()
         
         # Verify message format
         call_args = mock_telegram.send_message.call_args[1]
-        assert call_args["chat_id"] == "123"
+        assert call_args["chat_id"] == chat_id
         assert "📅 Next Week's Plan" in call_args["text"]
         assert "Phase Schedule" in call_args["text"]
+        
+        # Verify success response
+        assert result["statusCode"] == 200
+        assert result["headers"]["Content-Type"] == "application/json"
+        response = json.loads(result["body"])
+        assert response["ok"] is True
+        assert response["result"]["message"] == "Weekly plan sent"
 
 def test_weeklyplan_command_unexpected_error():
     """Test weeklyplan command handling of unexpected errors."""
-    # Mock update data
-    update = {
-        "message": {
-            "chat": {"id": "123"},
-            "from": {"id": "456"}
-        }
-    }
+    # Test parameters
+    user_id = "456"
+    chat_id = "123"
     
     # Mock dependencies
     mock_telegram = Mock()
@@ -112,10 +111,15 @@ def test_weeklyplan_command_unexpected_error():
         mock_dynamo.query_items.side_effect = Exception("Unexpected error")
         
         # Execute command
-        handle_weeklyplan_command(update)
+        result = handle_weeklyplan_command(user_id, chat_id)
         
         # Verify error message sent
         mock_telegram.send_message.assert_called_once_with(
-            chat_id="123",
+            chat_id=chat_id,
             text="Sorry, there was an error generating your weekly plan. Please try again later."
         )
+        
+        # Verify error response
+        assert result["statusCode"] == 200
+        assert result["headers"]["Content-Type"] == "application/json"
+        assert "error_code" in json.loads(result["body"])
