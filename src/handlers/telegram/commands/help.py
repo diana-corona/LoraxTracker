@@ -45,8 +45,7 @@ def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     try:
         response = telegram.send_message(
             chat_id=chat_id,
-            text=HELP_MESSAGE,
-            parse_mode="HTML"
+            text=HELP_MESSAGE
         )
         
         logger.info("Help message sent successfully", extra={
