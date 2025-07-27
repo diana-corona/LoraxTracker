@@ -19,6 +19,7 @@ Available commands:
 /phase - Get your current cycle phase
 /predict - Get predictions for your next cycle
 /statistics - View your cycle statistics
+/history - View your period history (last 6 months)
 
 📅 Planning Commands:
 /weeklyplan - Get personalized weekly recommendations

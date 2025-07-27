@@ -55,8 +55,15 @@ def test_phase_recommendations():
         )
     ]
     
-    # Test Power Phase recommendations
+    # Test First Power Phase recommendations (Days 1-10)
     phase = get_current_phase(events, date(2024, 1, 3))
+    assert phase.dietary_style == "Ketobiotic"
+    assert "13 to 72 hours" in phase.fasting_protocol
+    assert any("Healthy fats" in rec for rec in phase.food_recommendations)
+    assert any("Clean proteins" in rec for rec in phase.food_recommendations)
+    
+    # Test Second Power Phase recommendations (Days 16-19) - should be identical to first
+    phase = get_current_phase(events, date(2024, 1, 17))
     assert phase.dietary_style == "Ketobiotic"
     assert "13 to 72 hours" in phase.fasting_protocol
     assert any("Healthy fats" in rec for rec in phase.food_recommendations)

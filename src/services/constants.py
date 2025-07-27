@@ -150,10 +150,10 @@ PHASE_TRANSITIONS = {
 
 # Mapping of cycle days to functional phases
 FUNCTIONAL_PHASE_MAPPING = [
-    (1, 10, FunctionalPhaseType.POWER),
+    (1, 10, FunctionalPhaseType.POWER),      # First Power phase
     (11, 15, FunctionalPhaseType.MANIFESTATION),
-    (16, 19, FunctionalPhaseType.POWER),
-    (20, 28, FunctionalPhaseType.NURTURE)
+    (16, 19, FunctionalPhaseType.POWER),     # Second Power phase - same recommendations as first
+    (20, 28, FunctionalPhaseType.NURTURE)    # Continues until next period
 ]
 
 # Shopping list ingredients by phase
