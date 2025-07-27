@@ -17,6 +17,7 @@ except ImportError:
 from src.models.event import CycleEvent
 from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.weekly_plan import WeeklyPlan, PhaseGroup, PhaseRecommendations
+from src.services.constants import TRADITIONAL_PHASE_RECOMMENDATIONS
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
 from src.services.phase import get_phase_details, predict_next_phase
 from src.services.recipe import RecipeService
@@ -132,11 +133,15 @@ def create_meal_plan_preview(meals: List[MealRecommendation]) -> List[str]:
         
         if len(meal.recipes) == 1:
             recipe = meal.recipes[0]
-            preview.append(f"{emoji} {meal.meal_type.title()}: {recipe.title} ({recipe.prep_time} min)")
+            url_text = f" - {recipe.url}" if recipe.url else ""
+            preview.append(f"{emoji} {meal.meal_type.title()}: {recipe.title} ({recipe.prep_time} min){url_text}")
         else:
             # Multiple recipes for this meal type
-            recipe_titles = [f"{r.title} ({r.prep_time} min)" for r in meal.recipes]
-            preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_titles)}")
+            recipe_texts = []
+            for r in meal.recipes:
+                url_text = f" - {r.url}" if r.url else ""
+                recipe_texts.append(f"{r.title} ({r.prep_time} min){url_text}")
+            preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_texts)}")
     
     return preview
 
@@ -268,45 +273,54 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
     
     # Add phase breakdown
     formatted.extend(["🌙 Phase Schedule:"])
+    
+    # Group phase groups by functional phase
+    functional_groups = {}
     for group in plan.phase_groups:
-        date_range = (
-            f"{group.start_date.strftime('%a %d')}-{group.end_date.strftime('%a %d')}"
-            if group.start_date != group.end_date
-            else f"{group.start_date.strftime('%A %d')}"
-        )
-        
+        if group.functional_phase not in functional_groups:
+            functional_groups[group.functional_phase] = {
+                'groups': [],
+                'recommendations': group.recommendations  # Use first group's recommendations for shared info
+            }
+        functional_groups[group.functional_phase]['groups'].append(group)
+    
+    # Format each functional phase
+    for functional_phase, data in functional_groups.items():
         formatted.extend([
             "",
-            f"{date_range}: {group.functional_phase.value.title()} Phase {get_phase_emoji(group.functional_phase)}",
-            f"({group.traditional_phase.value.title()})",
-            f"⏱️ Fasting: {group.recommendations.fasting_protocol}",
+            f"{functional_phase.value.title()} Phase {get_phase_emoji(functional_phase)}",
+            f"⏱️ Fasting: {data['recommendations'].fasting_protocol}",
             "🥗 Key Foods:",
-            *[f"  - {food}" for food in group.recommendations.foods]
+            *[f"  - {food}" for food in data['recommendations'].foods]
         ])
         
         # Add recipe suggestions if available
-        if group.recommendations.meal_plan_preview:
+        if data['recommendations'].meal_plan_preview:
             formatted.extend([
                 "🍽️ Suggested Meals:",
-                *[f"  {meal}" for meal in group.recommendations.meal_plan_preview]
+                *[f"  {meal}" for meal in data['recommendations'].meal_plan_preview]
             ])
         
-        formatted.extend([
-            "💪 Activities:",
-            *[f"  - {activity}" for activity in group.recommendations.activities]
-        ])
-        
-        if group.recommendations.supplements:
+        # Add individual phase groups with their traditional phase and specific activities
+        formatted.append("")  # Add space before individual phases
+        for group in data['groups']:
+            date_range = (
+                f"{group.start_date.strftime('%a %d')}-{group.end_date.strftime('%a %d')}"
+                if group.start_date != group.end_date
+                else f"{group.start_date.strftime('%A %d')}"
+            )
+            
             formatted.extend([
+                f"{date_range}: ({group.traditional_phase.value.title()})",
+                f"💪 Activities: {', '.join(TRADITIONAL_PHASE_RECOMMENDATIONS[group.traditional_phase])}"
+            ])
+        
+        # Add supplements if available (shared at functional phase level)
+        if data['recommendations'].supplements:
+            formatted.extend([
+                "",
                 "💊 Supplements:",
-                *[f"  - {supp}" for supp in group.recommendations.supplements]
-            ])
-        
-        # Add shopping preview if available
-        if group.recommendations.shopping_preview:
-            formatted.extend([
-                "🛒 Key Ingredients:",
-                *[f"  • {ingredient}" for ingredient in group.recommendations.shopping_preview]
+                *[f"  - {supp}" for supp in data['recommendations'].supplements]
             ])
     
     return formatted
