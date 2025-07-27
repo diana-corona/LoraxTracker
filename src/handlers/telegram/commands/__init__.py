@@ -7,6 +7,7 @@ from .phase import handle_phase_command
 from .prediction import handle_prediction_command
 from .statistics import handle_statistics_command
 from .weeklyplan import handle_weeklyplan_command
+from .help import handle_help_command
 
 __all__ = [
     "handle_start_command",
@@ -14,5 +15,6 @@ __all__ = [
     "handle_phase_command",
     "handle_prediction_command",
     "handle_statistics_command",
-    "handle_weeklyplan_command"
+    "handle_weeklyplan_command",
+    "handle_help_command"
 ]
