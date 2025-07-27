@@ -20,6 +20,7 @@ Available commands:
 /predict - Get predictions for your next cycle
 /statistics - View your cycle statistics
 /history - View your period history (last 6 months)
+/mygroups - View your group chats and partners
 
 📅 Planning Commands:
 /weeklyplan - Get personalized weekly recommendations

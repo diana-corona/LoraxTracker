@@ -9,6 +9,7 @@ from .statistics import handle_statistics_command
 from .weeklyplan import handle_weeklyplan_command
 from .help import handle_help_command
 from .history import handle_history_command
+from .mygroups import handle_mygroups_command
 
 __all__ = [
     "handle_start_command",
@@ -18,5 +19,6 @@ __all__ = [
     "handle_statistics_command",
     "handle_weeklyplan_command",
     "handle_help_command",
-    "handle_history_command"
+    "handle_history_command",
+    "handle_mygroups_command"
 ]
