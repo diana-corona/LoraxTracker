@@ -4,14 +4,18 @@ Telegram /mygroups command handler.
 Displays user's group chat and partner information in private chats.
 """
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from aws_lambda_powertools import Logger
 from src.models.user import User
-from src.utils.dynamo import get_item
 from src.utils.clients import get_dynamo, get_telegram, get_clients
 
 logger = Logger()
+
+def get_user_data(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get user data from DynamoDB."""
+    dynamo = get_dynamo()
+    return dynamo.get_item({"user_id": user_id})
 
 def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
@@ -57,7 +61,7 @@ def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             }
 
         # Get user data
-        user_data = get_item('users', {'user_id': user_id})
+        user_data = get_user_data(user_id)
         if not user_data:
             message = "You are not registered in the system."
             telegram.send_message(chat_id=chat_id, text=message)
@@ -95,7 +99,7 @@ def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         # Add partner information if available
         if user.partner_id:
             try:
-                partner_data = get_item('users', {'user_id': user.partner_id})
+                partner_data = get_user_data(user.partner_id)
                 if partner_data:
                     partner = User(**partner_data)
                     partner_name = partner.name or "Unknown Partner"

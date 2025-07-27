@@ -24,6 +24,7 @@ Available commands:
 
 📅 Planning Commands:
 /weeklyplan - Get personalized weekly recommendations
+/select_recipes - Select recipes and get a shopping list
 """
 
 def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:

@@ -1,35 +1,23 @@
 """
-Keyboard creation functions for Telegram bot.
+Keyboard layout definitions for Telegram bot interactions.
 """
-from typing import Dict, List
-import json
+from typing import List, Dict, Any
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-def create_inline_keyboard(
-    buttons: List[List[Dict[str, str]]]
-) -> Dict[str, List[List[Dict[str, str]]]]:
+def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: str) -> InlineKeyboardMarkup:
     """
-    Create an inline keyboard markup.
+    Create inline keyboard for recipe selection.
     
     Args:
-        buttons: List of button rows with text and callback data
+        recipes: List of recipe dictionaries containing title and prep_time
+        meal_type: Type of meal (breakfast, lunch, dinner, snack)
         
     Returns:
-        Keyboard markup dictionary
+        InlineKeyboardMarkup with recipe options
     """
-    return {
-        "inline_keyboard": buttons
-    }
-
-def create_rating_keyboard() -> Dict[str, List[List[Dict[str, str]]]]:
-    """Create rating keyboard with 1-5 stars."""
-    buttons = [[{
-        "text": "⭐" * i,
-        "callback_data": json.dumps({
-            "action": "rate",
-            "value": i
-        })
-    } for i in range(1, 6)]]
-    
-    return {
-        "inline_keyboard": buttons
-    }
+    buttons = []
+    for recipe in recipes:
+        callback_data = f"recipe_{meal_type}_{recipe['id']}"
+        button_text = f"{recipe['title']} ({recipe['prep_time']} min)"
+        buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    return InlineKeyboardMarkup(buttons)
