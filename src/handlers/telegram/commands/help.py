@@ -1,9 +1,12 @@
 """
 Help command handler for displaying available commands.
 """
+import os
 from typing import Dict, Any
 from src.utils.telegram import TelegramClient
+from aws_lambda_powertools import Logger
 
+logger = Logger()
 telegram = TelegramClient()
 
 HELP_MESSAGE = """
@@ -34,8 +37,30 @@ def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     Returns:
         API Gateway Lambda proxy response
     """
-    return telegram.send_message(
-        chat_id=chat_id,
-        text=HELP_MESSAGE,
-        parse_mode="HTML"
-    )
+    logger.info("Handling help command request", extra={
+        "user_id": user_id,
+        "chat_id": chat_id
+    })
+    
+    try:
+        response = telegram.send_message(
+            chat_id=chat_id,
+            text=HELP_MESSAGE,
+            parse_mode="HTML"
+        )
+        
+        logger.info("Help message sent successfully", extra={
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "status_code": response["statusCode"]
+        })
+        
+        return response
+        
+    except Exception as e:
+        logger.exception("Error sending help message", extra={
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "error_type": e.__class__.__name__
+        })
+        raise

@@ -20,8 +20,10 @@ from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
 from src.utils.auth import Authorization
 from src.services.exceptions import AuthorizationError
 
+import os
+
 logger = Logger()
-dynamo = DynamoDBClient()
+dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 telegram = TelegramClient()
 auth = Authorization()
 

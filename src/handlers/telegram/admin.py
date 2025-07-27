@@ -7,8 +7,10 @@ from typing import Dict, Any, List
 from aws_lambda_powertools import Logger
 from src.utils.telegram import TelegramClient
 from src.utils.auth import Authorization
+from src.utils.dynamo import DynamoDBClient
 
 logger = Logger()
+dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 telegram = TelegramClient()
 auth = Authorization()
 

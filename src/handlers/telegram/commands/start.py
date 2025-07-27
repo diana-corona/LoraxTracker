@@ -1,14 +1,32 @@
 """
 Telegram /start command handler.
 """
+import os
 import json
 from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
 from src.utils.telegram import TelegramClient
+from src.utils.dynamo import DynamoDBClient
 
 logger = Logger()
 telegram = TelegramClient()
+dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+
+# Add help command to the list
+START_MESSAGE_PRIVATE = (
+    "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
+    "You can use these commands:\n"
+    "/help - Show all available commands\n"
+    "/register YYYY-MM-DD - Register a cycle event\n"
+    "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
+    "/phase - View your current phase\n"
+    "/predict - View next cycle prediction\n"
+    "/statistics - View your cycle statistics\n"
+    "/mygroups - View your groups and partners"
+)
+
+START_MESSAGE_GROUP = "Hi! I'm Lorax, your weekly planner assistant. 🌙"
 
 def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
@@ -39,19 +57,7 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             }
         )
         
-        if is_group:
-            message = "Hi! I'm Lorax, your weekly planner assistant. 🌙"
-        else:
-            message = (
-                "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
-                "You can use these commands:\n"
-                "/register YYYY-MM-DD - Register a cycle event\n"
-                "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
-                "/phase - View your current phase\n"
-                "/predict - View next cycle prediction\n"
-                "/statistics - View your cycle statistics\n"
-                "/mygroups - View your groups and partners"
-            )
+        message = START_MESSAGE_GROUP if is_group else START_MESSAGE_PRIVATE
         
         telegram.send_message(chat_id=chat_id, text=message)
     
