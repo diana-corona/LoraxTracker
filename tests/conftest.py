@@ -7,9 +7,16 @@ from datetime import date, timedelta
 from typing import List
 from unittest.mock import patch, MagicMock
 
-# Mock TelegramClient before any imports
+# Set required environment variables for tests
+os.environ['TRACKER_TABLE_NAME'] = 'test-table'
+os.environ['TELEGRAM_BOT_TOKEN'] = 'test-token'
+
+# Mock DynamoDBClient and TelegramClient before any imports
+mock_dynamo = MagicMock()
 mock_client = MagicMock()
-with patch('src.utils.telegram.client.TelegramClient', return_value=mock_client) as _:
+
+with patch('src.utils.dynamo.DynamoDBClient', return_value=mock_dynamo), \
+     patch('src.utils.telegram.client.TelegramClient', return_value=mock_client):
     from src.models.event import CycleEvent
     from src.models.phase import TraditionalPhaseType
     from src.models.user import User
@@ -19,6 +26,11 @@ with patch('src.utils.telegram.client.TelegramClient', return_value=mock_client)
 def telegram_client():
     """Get the mock telegram client."""
     return mock_client
+
+@pytest.fixture
+def dynamo_client():
+    """Get the mock DynamoDB client."""
+    return mock_dynamo
 
 @pytest.fixture
 def sample_user() -> User:

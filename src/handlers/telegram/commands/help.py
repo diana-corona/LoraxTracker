@@ -1,13 +1,11 @@
 """
 Help command handler for displaying available commands.
 """
-import os
 from typing import Dict, Any
-from src.utils.telegram import TelegramClient
 from aws_lambda_powertools import Logger
+from src.utils.clients import get_telegram
 
 logger = Logger()
-telegram = TelegramClient()
 
 HELP_MESSAGE = """
 Available commands:
@@ -43,6 +41,8 @@ def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     })
     
     try:
+        # Get client lazily
+        telegram = get_telegram()
         response = telegram.send_message(
             chat_id=chat_id,
             text=HELP_MESSAGE

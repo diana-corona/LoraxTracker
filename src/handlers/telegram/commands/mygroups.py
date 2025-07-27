@@ -3,18 +3,15 @@ Telegram /mygroups command handler.
 
 Displays user's group chat and partner information in private chats.
 """
-import os
 import json
 from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
-from src.utils.telegram import TelegramClient
 from src.models.user import User
-from src.utils.dynamo import get_item, DynamoDBClient
+from src.utils.dynamo import get_item
+from src.utils.clients import get_dynamo, get_telegram, get_clients
 
 logger = Logger()
-telegram = TelegramClient()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 
 def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
@@ -30,6 +27,8 @@ def handle_mygroups_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     Returns:
         Dict with API response
     """
+    # Get clients lazily
+    dynamo, telegram = get_clients()
     try:
         # Get chat info to determine if it's a group
         chat_info = telegram.get_chat(chat_id)

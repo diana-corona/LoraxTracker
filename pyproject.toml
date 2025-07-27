@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lorax-tracker"
+version = "0.1.0"
+description = "Lorax Tracker Telegram Bot"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["src"]

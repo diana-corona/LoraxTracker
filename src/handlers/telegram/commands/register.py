@@ -1,24 +1,21 @@
 """
 Telegram /register command handler.
 """
-import os
 import json
 from typing import Dict, Any, List
 from datetime import datetime
 
 from aws_lambda_powertools import Logger
 from src.utils.telegram import (
-    TelegramClient,
     validate_date,
     validate_date_range,
     generate_dates_in_range
 )
-from src.utils.dynamo import DynamoDBClient, create_pk, create_event_sk
+from src.utils.dynamo import create_pk, create_event_sk
 from src.models.event import CycleEvent
+from src.utils.clients import get_clients
 
 logger = Logger()
-telegram = TelegramClient()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 
 def handle_register_event(
     user_id: str,
@@ -33,6 +30,9 @@ def handle_register_event(
         
         start_date = validate_date(date_str)
         end_date = validate_date(end_date_str)
+        
+        # Get clients lazily
+        dynamo, telegram = get_clients()
         
         if not start_date or not end_date:
             telegram.send_message(
@@ -95,6 +95,9 @@ def handle_register_event(
     else:
         # Handle single date
         date_obj = validate_date(date_str)
+        # Get clients lazily
+        dynamo, telegram = get_clients()
+        
         if not date_obj:
             telegram.send_message(
                 chat_id=chat_id,

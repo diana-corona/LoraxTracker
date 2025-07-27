@@ -14,9 +14,33 @@ class AuthorizationError(Exception):
 class Authorization:
     """Authorization utility class."""
     
-    def __init__(self):
-        self.dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+    def __init__(self, dynamo_client=None, mock_result=None):
+        """
+        Initialize Authorization utility.
+        
+        Args:
+            dynamo_client: Optional DynamoDB client. If not provided, will create one.
+            mock_result: Optional mock result for testing.
+        """
+        self._dynamo = dynamo_client
+        self._mock_result = mock_result
     
+    @property
+    def dynamo(self):
+        """Get or create DynamoDB client lazily."""
+        if self._dynamo is None:
+            self._dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+        return self._dynamo
+    
+    def set_mock_result(self, result: bool) -> None:
+        """
+        Set mock result for testing.
+        
+        Args:
+            result: True to allow access, False to deny
+        """
+        self._mock_result = result
+
     def check_user_authorized(self, user_id: str) -> bool:
         """
         Check if a user is authorized to use the bot.
@@ -25,14 +49,31 @@ class Authorization:
             user_id: Telegram user ID
             
         Returns:
-            bool: True if user is authorized, False otherwise
+            bool: True if user is authorized
+            
+        Raises:
+            AuthorizationError: If user is not authorized
         """
-        allowed_user = self.dynamo.get_item({
-            "PK": f"ALLOWED_USER#{user_id}",
-            "SK": "METADATA"
-        })
-        
-        return bool(allowed_user and allowed_user.get("status") == "active")
+        # Handle mock result first to prevent any DynamoDB interactions in test mode
+        if self._mock_result is not None:
+            if not self._mock_result:
+                raise AuthorizationError("You are not authorized to use this command.")
+            return True
+
+        try:
+            # Only try to use DynamoDB if we have a client
+            if not self.dynamo:
+                raise AuthorizationError("You are not authorized to use this command.")
+
+            allowed_user = self.dynamo.get_item({
+                "PK": f"ALLOWED_USER#{user_id}",
+                "SK": "METADATA"
+            })
+            if not allowed_user or allowed_user.get("status") != "active":
+                raise AuthorizationError("You are not authorized to use this command.")
+            return True
+        except Exception:
+            raise AuthorizationError("You are not authorized to use this command.")
     
     def add_allowed_user(
         self,

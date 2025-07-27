@@ -11,12 +11,34 @@ from src.utils.dynamo import DynamoDBClient, create_pk
 import os
 
 logger = Logger()
-telegram = TelegramClient()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+
+# Initialize shared clients (lazy loading)
+_dynamo = None
+_telegram = None
+
+def get_dynamo():
+    """Get or create DynamoDB client."""
+    global _dynamo
+    if _dynamo is None:
+        _dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+    return _dynamo
+
+def get_telegram():
+    """Get or create Telegram client."""
+    global _telegram
+    if _telegram is None:
+        _telegram = TelegramClient()
+    return _telegram
+
+def get_clients():
+    """Get all required clients."""
+    return get_dynamo(), get_telegram()
 
 def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
     """Handle callback queries from inline keyboards."""
     try:
+        # Get clients lazily
+        dynamo, telegram = get_clients()
         chat_id = str(callback_query["message"]["chat"]["id"])
         user_id = str(callback_query["from"]["id"])
         data = json.loads(callback_query["data"])
@@ -57,6 +79,8 @@ def handle_rating(
 ) -> Dict[str, Any]:
     """Handle recommendation rating callback."""
     try:
+        # Get clients lazily
+        dynamo, telegram = get_clients()
         # Update recommendation in DynamoDB
         dynamo.update_item(
             key={

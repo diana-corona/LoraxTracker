@@ -89,17 +89,17 @@ def test_generate_weekly_plan_phase_transitions():
     events = [
         CycleEvent(
             user_id="test_user",
-            date=today - timedelta(days=5),
+            date=today - timedelta(days=14),  # Two weeks ago, well into follicular phase
             state=TraditionalPhaseType.MENSTRUATION.value
         ),
         CycleEvent(
             user_id="test_user",
-            date=today - timedelta(days=4),
+            date=today - timedelta(days=13),
             state=TraditionalPhaseType.MENSTRUATION.value
         ),
         CycleEvent(
             user_id="test_user",
-            date=today,
+            date=today - timedelta(days=7),  # A week ago, should be in ovulation phase
             state=TraditionalPhaseType.FOLLICULAR.value
         )
     ]

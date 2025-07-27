@@ -8,26 +8,19 @@ Typical usage:
     User sends: /weeklyplan
     Bot responds with a personalized weekly plan
 """
-import asyncio
 from typing import Optional, Dict, Any
 
 from aws_lambda_powertools import Logger
 
-from src.utils.dynamo import DynamoDBClient, create_pk
-from src.utils.telegram import TelegramClient
+from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
 from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
-from src.utils.auth import Authorization
-from src.services.exceptions import AuthorizationError
-
-import os
+from src.utils.auth import AuthorizationError
+from src.utils.clients import get_telegram, get_all_clients
 
 logger = Logger()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
-telegram = TelegramClient()
-auth = Authorization()
 
-async def handle_weeklyplan_command(
+def handle_weeklyplan_command(
     update: Dict[str, Any],
     context: Optional[Dict[str, Any]] = None
 ) -> None:
@@ -54,14 +47,23 @@ async def handle_weeklyplan_command(
         "chat_id": chat_id
     })
 
-    try:
-        # Validate user authorization
-        if not auth.check_user_authorized(user_id):
-            logger.warning("Unauthorized weeklyplan access attempt", extra={
-                "user_id": user_id
-            })
-            raise AuthorizationError("You are not authorized to use this command.")
+    # Get required clients first
+    dynamo, telegram, auth = get_all_clients()
 
+    # Handle authorization first
+    try:
+        auth.check_user_authorized(user_id)
+    except AuthorizationError as e:
+        logger.warning("Unauthorized weeklyplan access attempt", extra={
+            "user_id": user_id
+        })
+        telegram.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ {str(e)}"
+        )
+        return
+
+    try:
         # Get user's events
         events = dynamo.query_items(
             partition_key="PK",
@@ -86,7 +88,7 @@ async def handle_weeklyplan_command(
         formatted_plan = format_weekly_plan(weekly_plan)
         
         # Send plan
-        await telegram.send_message(
+        telegram.send_message(
             chat_id=chat_id,
             text="\n".join(formatted_plan)
         )
@@ -98,13 +100,8 @@ async def handle_weeklyplan_command(
             "plan_end": weekly_plan.end_date.isoformat()
         })
         
-    except AuthorizationError as e:
-        await telegram.send_message(
-            chat_id=chat_id,
-            text=f"⚠️ {str(e)}"
-        )
     except ValueError as e:
-        await telegram.send_message(
+        telegram.send_message(
             chat_id=chat_id,
             text=f"⚠️ {str(e)}"
         )
@@ -113,10 +110,11 @@ async def handle_weeklyplan_command(
             "Error generating weekly plan",
             extra={
                 "user_id": user_id,
-                "error_type": e.__class__.__name__
+                "error_type": e.__class__.__name__,
+                "is_auth_error": isinstance(e, AuthorizationError)
             }
         )
-        await telegram.send_message(
+        telegram.send_message(
             chat_id=chat_id,
             text="Sorry, there was an error generating your weekly plan. Please try again later."
         )

@@ -5,19 +5,18 @@ import json
 from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
-from src.utils.telegram import TelegramClient
-from src.utils.dynamo import DynamoDBClient, create_pk
+from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
 from src.services.phase import get_current_phase, generate_phase_report
-
-import os
+from src.utils.clients import get_dynamo, get_telegram, get_clients
 
 logger = Logger()
-telegram = TelegramClient()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 
 def handle_phase_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """Handle /phase command."""
+    # Get clients lazily
+    dynamo, telegram = get_clients()
+    
     # Get user's events
     events = dynamo.query_items(
         partition_key="PK",

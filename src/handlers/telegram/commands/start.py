@@ -1,17 +1,13 @@
 """
 Telegram /start command handler.
 """
-import os
 import json
 from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
-from src.utils.telegram import TelegramClient
-from src.utils.dynamo import DynamoDBClient
+from src.utils.clients import get_clients
 
 logger = Logger()
-telegram = TelegramClient()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 
 # Add help command to the list
 START_MESSAGE_PRIVATE = (
@@ -59,6 +55,8 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         
         message = START_MESSAGE_GROUP if is_group else START_MESSAGE_PRIVATE
         
+        # Get clients lazily
+        dynamo, telegram = get_clients()
         telegram.send_message(chat_id=chat_id, text=message)
     
         return {

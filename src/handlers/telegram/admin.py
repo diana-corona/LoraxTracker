@@ -10,9 +10,37 @@ from src.utils.auth import Authorization
 from src.utils.dynamo import DynamoDBClient
 
 logger = Logger()
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
-telegram = TelegramClient()
-auth = Authorization()
+
+# Initialize shared clients (lazy loading)
+_dynamo = None
+_telegram = None
+_auth = None
+
+def get_dynamo():
+    """Get or create DynamoDB client."""
+    global _dynamo
+    if _dynamo is None:
+        _dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+    return _dynamo
+
+def get_telegram():
+    """Get or create Telegram client."""
+    global _telegram
+    if _telegram is None:
+        _telegram = TelegramClient()
+    return _telegram
+
+def get_auth():
+    """Get or create Authorization instance."""
+    global _auth
+    if _auth is None:
+        _auth = Authorization()
+    return _auth
+
+# Helper function to get all clients
+def get_clients():
+    """Get all required clients."""
+    return get_dynamo(), get_telegram(), get_auth()
 
 def is_admin(user_id: str) -> bool:
     """
@@ -29,6 +57,7 @@ def is_admin(user_id: str) -> bool:
 
 def handle_allow_command(user_id: str, chat_id: str, args: List[str]) -> Dict[str, Any]:
     """Handle /allow command for admins."""
+    dynamo, telegram, auth = get_clients()
     if not args or len(args) != 2 or args[1] not in ["user", "partner", "group"]:
         return telegram.send_message(
             chat_id=chat_id,
@@ -69,6 +98,7 @@ def handle_allow_command(user_id: str, chat_id: str, args: List[str]) -> Dict[st
 
 def handle_revoke_command(user_id: str, chat_id: str, args: List[str]) -> Dict[str, Any]:
     """Handle /revoke command for admins."""
+    dynamo, telegram, auth = get_clients()
     if not args:
         return telegram.send_message(
             chat_id=chat_id,

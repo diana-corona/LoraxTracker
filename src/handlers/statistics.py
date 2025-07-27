@@ -18,11 +18,27 @@ tracer = Tracer()
 
 import os
 
-dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
-auth = Authorization()
+# Initialize shared clients (lazy loading)
+_dynamo = None
+_auth = None
+
+def get_dynamo():
+    """Get or create DynamoDB client."""
+    global _dynamo
+    if _dynamo is None:
+        _dynamo = DynamoDBClient(f"TrackerTable-{os.environ.get('STAGE', 'dev')}")
+    return _dynamo
+
+def get_auth():
+    """Get or create Authorization instance."""
+    global _auth
+    if _auth is None:
+        _auth = Authorization()
+    return _auth
 
 def get_user_events(user_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[CycleEvent]:
     """Get user events filtered by date range."""
+    dynamo = get_dynamo()
     events = dynamo.query_items(
         partition_key="PK",
         partition_value=create_pk(user_id)
@@ -71,7 +87,8 @@ def handler(event: Dict, context: LambdaContext) -> Dict:
                 })
             }
         
-        # Verify user is authorized
+        # Get auth instance and verify user is authorized
+        auth = get_auth()
         if not auth.check_user_authorized(user_id):
             return {
                 "statusCode": 403,
