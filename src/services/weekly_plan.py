@@ -1,14 +1,26 @@
 """
 Service module for generating weekly cycle plans.
 """
+from enum import Enum
 from typing import Dict, List, Optional
 from datetime import date, timedelta
 
 from src.models.event import CycleEvent
-from src.models.phase import Phase, TraditionalPhaseType
+from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.weekly_plan import WeeklyPlan, PhaseGroup, PhaseRecommendations
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
+
 from src.services.phase import get_phase_details, predict_next_phase
+
+
+def get_phase_emoji(phase: FunctionalPhaseType) -> str:
+    """Get emoji for functional phase."""
+    emoji_map = {
+        FunctionalPhaseType.POWER: "⚡",
+        FunctionalPhaseType.MANIFESTATION: "✨",
+        FunctionalPhaseType.NURTURE: "🌱"
+    }
+    return emoji_map[phase]
 
 def create_phase_recommendations(phase_details: Dict) -> PhaseRecommendations:
     """Create phase recommendations from phase details."""
@@ -133,7 +145,7 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
         "------------------------"
     ]
     
-    # Add cycle prediction if available
+    # Add cycle prediction only if it falls within this week's plan
     if plan.next_cycle_date:
         formatted.extend([
             "🔮 Cycle Prediction:",
@@ -143,9 +155,10 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
         ])
         if plan.warning:
             formatted.extend([f"⚠️ Note: {plan.warning}", ""])
+        formatted.append("")  # Extra space before phase schedule
     
     # Add phase breakdown
-    formatted.extend(["📋 Phase Schedule:"])
+    formatted.extend(["🌙 Phase Schedule:"])
     for group in plan.phase_groups:
         date_range = (
             f"{group.start_date.strftime('%a %d')}-{group.end_date.strftime('%a %d')}"
@@ -154,18 +167,19 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
         )
         
         formatted.extend([
-            f"\n{date_range}: {group.traditional_phase.value.title()} Phase",
-            f"({group.functional_phase.value.title()} Energy)",
-            f"• Fasting: {group.recommendations.fasting_protocol}",
-            "• Key Foods:",
+            "",
+            f"{date_range}: {group.functional_phase.value.title()} Phase {get_phase_emoji(group.functional_phase)}",
+            f"({group.traditional_phase.value.title()})",
+            f"⏱️ Fasting: {group.recommendations.fasting_protocol}",
+            "🥗 Key Foods:",
             *[f"  - {food}" for food in group.recommendations.foods],
-            "• Activities:",
+            "💪 Activities:",
             *[f"  - {activity}" for activity in group.recommendations.activities]
         ])
         
         if group.recommendations.supplements:
             formatted.extend([
-                "• Supplements:",
+                "💊 Supplements:",
                 *[f"  - {supp}" for supp in group.recommendations.supplements]
             ])
     
