@@ -26,8 +26,7 @@ from .commands import (
     handle_statistics_command,
     handle_weeklyplan_command,
     handle_help_command,
-    handle_history_command,
-    handle_select_recipes_command
+    handle_history_command
 )
 from .callbacks import handle_callback_query
 
@@ -205,9 +204,6 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
             
         elif command == "/history":
             return handle_history_command(user_id, chat_id)
-            
-        elif command == "/select_recipes":
-            return handle_select_recipes_command(user_id, chat_id)
             
         else:
             return telegram.send_message(

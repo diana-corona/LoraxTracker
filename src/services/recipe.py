@@ -70,6 +70,11 @@ class RecipeService:
         """Initialize recipe service with parser."""
         self.parser = RecipeMarkdownParser()
         self._recipes: Dict[str, Recipe] = {}
+        self._phase_recipes: Dict[str, Dict[str, Recipe]] = {
+            'power': {},
+            'nurture': {},
+            'manifestation': {}
+        }
         self._load_recipes()
 
     def _load_recipes(self) -> None:
@@ -77,13 +82,17 @@ class RecipeService:
         recipes_dir = Path("recipes")
         for recipe_dir in recipes_dir.glob("**/[!.]*"):  # Ignore hidden directories
             if recipe_dir.is_dir() and recipe_dir.name not in {'to-process', 'uncategorized'}:
+                phase = recipe_dir.name  # Directory name indicates phase
                 for recipe_file in recipe_dir.glob("*.md"):
                     if recipe_file.name != 'TEMPLATE_RECIPE.md':
                         try:
                             recipe = self.parser.parse_recipe_file(str(recipe_file))
                             if recipe:
-                                self._recipes[recipe_file.stem] = recipe
-                                logger.info(f"Loaded recipe: {recipe.title}")
+                                recipe_id = recipe_file.stem
+                                self._recipes[recipe_id] = recipe
+                                if phase in self._phase_recipes:
+                                    self._phase_recipes[phase][recipe_id] = recipe
+                                logger.info(f"Loaded recipe: {recipe.title} for phase {phase}")
                         except Exception as e:
                             logger.error(f"Error loading recipe {recipe_file}: {str(e)}")
 
@@ -94,19 +103,33 @@ class RecipeService:
             logger.warning(f"Recipe not found: {recipe_id}")
         return recipe
 
-    def get_recipes_by_meal_type(self, meal_type: str) -> List[Dict[str, str]]:
-        """Get all recipes for a specific meal type."""
+    def get_recipes_by_meal_type(self, meal_type: str, phase: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, str]]:
+        """
+        Get recipes for a specific meal type, optionally filtered by phase and limited to N options.
+        
+        Args:
+            meal_type: Type of meal (breakfast, lunch, dinner, snack)
+            phase: Optional phase to filter by (power, nurture, manifestation)
+            limit: Optional maximum number of recipes to return
+        """
+        # Get recipes from specific phase if provided, otherwise use all recipes
+        source_recipes = self._phase_recipes.get(phase, {}) if phase else self._recipes
+        
         recipes = [
             {
                 'id': recipe_id,
                 'title': recipe.title,
                 'prep_time': recipe.prep_time
             }
-            for recipe_id, recipe in self._recipes.items()
+            for recipe_id, recipe in source_recipes.items()
             if meal_type in recipe.tags
         ]
+
+        # Limit number of recipes if specified
+        if limit and len(recipes) > limit:
+            recipes = recipes[:limit]
         
-        logger.info(f"Found {len(recipes)} recipes for meal type: {meal_type}")
+        logger.info(f"Found {len(recipes)} recipes for meal type: {meal_type}" + (f" in phase {phase}" if phase else ""))
         return recipes
 
     def categorize_ingredient(self, ingredient: str) -> str:

@@ -22,8 +22,7 @@ START_MESSAGE_PRIVATE = (
     "/predict - View next cycle prediction\n"
     "/statistics - View your cycle statistics\n\n"
     "📅 Planning Commands:\n"
-    "/weeklyplan - Get personalized weekly recommendations\n"
-    "/select_recipes - Select recipes and get a shopping list"
+    "/weeklyplan - Get personalized weekly recommendations and meal planning"
 )
 
 START_MESSAGE_GROUP = "Hi! I'm Lorax, your weekly planner assistant. 🌙"

@@ -41,9 +41,9 @@ def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
         dynamo, telegram = get_clients()
         chat_id = str(callback_query["message"]["chat"]["id"])
         user_id = str(callback_query["from"]["id"])
-        # Handle recipe selection callbacks that don't use JSON format
+        # Handle recipe selection callbacks from weekly plan
         if "data" in callback_query and callback_query["data"].startswith("recipe_"):
-            from .commands.select_recipes import handle_recipe_callback
+            from .commands.weeklyplan import handle_recipe_callback
             return handle_recipe_callback(callback_query)
             
         data = json.loads(callback_query["data"])
