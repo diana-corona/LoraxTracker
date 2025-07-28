@@ -2,10 +2,13 @@
 Authorization utilities for access control.
 """
 import os
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
+from aws_lambda_powertools import Logger
 from src.utils.dynamo import DynamoDBClient
+
+logger = Logger()
 
 class AuthorizationError(Exception):
     """Raised when there is an error during authorization."""
@@ -53,19 +56,62 @@ class Authorization:
         """
         # Handle mock result first to prevent any DynamoDB interactions in test mode
         if self._mock_result is not None:
+            logger.debug("Using mock result for authorization", extra={
+                "user_id": user_id,
+                "mock_result": self._mock_result
+            })
             return self._mock_result
 
         try:
             # Only try to use DynamoDB if we have a client
             if not self.dynamo:
+                logger.error("DynamoDB client not initialized", extra={
+                    "user_id": user_id
+                })
                 return False
+
+            # Log the lookup attempt
+            logger.debug("Checking user authorization", extra={
+                "user_id": user_id,
+                "lookup_key": {
+                    "PK": f"ALLOWED_USER#{user_id}",
+                    "SK": "METADATA"
+                }
+            })
 
             allowed_user = self.dynamo.get_item({
                 "PK": f"ALLOWED_USER#{user_id}",
                 "SK": "METADATA"
             })
-            return bool(allowed_user and allowed_user.get("status") == "active")
-        except Exception:
+
+            # Handle case where allowed_user is None
+            if not allowed_user:
+                logger.debug("User not found in allow list", extra={
+                    "user_id": user_id
+                })
+                return False
+
+            # Get the status and log the result
+            status = allowed_user.get("status")
+            is_authorized = status == "active"
+
+            logger.debug("Authorization check result", extra={
+                "user_id": user_id,
+                "user_found": True,
+                "user_status": status,
+                "is_authorized": is_authorized,
+                "user_data": allowed_user  # Log full user data for debugging
+            })
+
+            return is_authorized
+
+        except Exception as e:
+            # Log specific exception details
+            logger.error("Error checking user authorization", extra={
+                "user_id": user_id,
+                "error_type": e.__class__.__name__,
+                "error_message": str(e)
+            })
             return False
     
     def add_allowed_user(

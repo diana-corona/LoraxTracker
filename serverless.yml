@@ -14,7 +14,6 @@ provider:
     ADMIN_USER_IDS: ${ssm:/lorax/admin-users}
     STAGE: ${sls:stage}
     TRACKER_TABLE_NAME: !Ref TrackerTable
-    ALLOW_LIST_TABLE_NAME: !Ref AllowListTable
   apiGateway:
     apiKeys:
       - name: loraxApiKey
@@ -25,9 +24,7 @@ provider:
         - Effect: Allow
           Action:
             - dynamodb:*
-          Resource: 
-            - !GetAtt TrackerTable.Arn
-            - !GetAtt AllowListTable.Arn
+          Resource: !GetAtt TrackerTable.Arn
         - Effect: Allow
           Action:
             - ssm:GetParameter
@@ -89,26 +86,6 @@ functions:
 
 resources:
   Resources:
-    AllowListTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: PK
-            AttributeType: S
-          - AttributeName: SK
-            AttributeType: S
-        KeySchema:
-          - AttributeName: PK
-            KeyType: HASH
-          - AttributeName: SK
-            KeyType: RANGE
-        Tags:
-          - Key: Service
-            Value: ${self:service}
-          - Key: Environment
-            Value: ${sls:stage}
-    
     TrackerTable:
       Type: AWS::DynamoDB::Table
       Properties:
