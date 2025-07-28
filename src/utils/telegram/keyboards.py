@@ -4,6 +4,26 @@ Keyboard layout definitions for Telegram bot interactions.
 from typing import List, Dict, Any, Union
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+def to_dict(markup: InlineKeyboardMarkup) -> Dict[str, Any]:
+    """
+    Convert InlineKeyboardMarkup to a dictionary format that Telegram API expects.
+    
+    Args:
+        markup: InlineKeyboardMarkup object
+        
+    Returns:
+        Dictionary representation of the keyboard markup
+    """
+    return {
+        "inline_keyboard": [
+            [
+                {"text": btn.text, "callback_data": btn.callback_data}
+                for btn in row
+            ]
+            for row in markup.inline_keyboard
+        ]
+    }
+
 def create_inline_keyboard(buttons: List[List[Dict[str, str]]]) -> InlineKeyboardMarkup:
     """
     Create an inline keyboard from a list of button definitions.
@@ -25,9 +45,10 @@ def create_inline_keyboard(buttons: List[List[Dict[str, str]]]) -> InlineKeyboar
                 )
             )
         keyboard.append(keyboard_row)
-    return InlineKeyboardMarkup(keyboard)
+    markup = InlineKeyboardMarkup(keyboard)
+    return to_dict(markup)
 
-def create_rating_keyboard() -> InlineKeyboardMarkup:
+def create_rating_keyboard() -> Dict[str, Any]:
     """
     Create an inline keyboard for rating recipes.
     
@@ -40,7 +61,7 @@ def create_rating_keyboard() -> InlineKeyboardMarkup:
     } for i in range(1, 6)]]
     return create_inline_keyboard(buttons)
 
-def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: str) -> InlineKeyboardMarkup:
+def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: str) -> Dict[str, Any]:
     """
     Create inline keyboard for recipe selection.
     
@@ -56,4 +77,5 @@ def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: s
         callback_data = f"recipe_{meal_type}_{recipe['id']}"
         button_text = f"{recipe['title']} ({recipe['prep_time']} min)"
         buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
-    return InlineKeyboardMarkup(buttons)
+    markup = InlineKeyboardMarkup(buttons)
+    return to_dict(markup)

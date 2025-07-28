@@ -12,13 +12,18 @@ logger = Logger()
 # Add help command to the list
 START_MESSAGE_PRIVATE = (
     "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
-    "You can use these commands:\n"
+    "You can use these commands:\n\n"
+    "📝 Basic Commands:\n"
     "/help - Show all available commands\n"
     "/register YYYY-MM-DD - Register a cycle event\n"
-    "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n"
+    "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n\n"
+    "📊 Information Commands:\n"
     "/phase - View your current phase\n"
     "/predict - View next cycle prediction\n"
-    "/statistics - View your cycle statistics"
+    "/statistics - View your cycle statistics\n\n"
+    "📅 Planning Commands:\n"
+    "/weeklyplan - Get personalized weekly recommendations\n"
+    "/select_recipes - Select recipes and get a shopping list"
 )
 
 START_MESSAGE_GROUP = "Hi! I'm Lorax, your weekly planner assistant. 🌙"

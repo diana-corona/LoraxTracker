@@ -38,7 +38,7 @@ class TelegramClient:
             "parse_mode": "HTML"
         }
         if reply_markup:
-            data["reply_markup"] = json.dumps(reply_markup)
+            data["reply_markup"] = reply_markup
             
         response = requests.post(
             f"{self.base_url}/sendMessage",
