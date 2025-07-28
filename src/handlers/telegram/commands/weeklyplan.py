@@ -15,6 +15,7 @@ from aws_lambda_powertools import Logger
 from src.utils.telegram.keyboards import create_recipe_selection_keyboard
 from src.services.recipe import RecipeService
 from src.services.recipe_selection_storage import RecipeSelectionStorage
+from src.utils.middleware import require_auth
 
 from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
@@ -172,6 +173,7 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             "isBase64Encoded": False
         }
 
+@require_auth
 def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle recipe selection callback from inline keyboard.
