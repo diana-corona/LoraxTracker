@@ -85,7 +85,14 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
         warning = "Limited data for prediction, using most recent cycle length"
     
     last_date = menstruation_events[-1].date
-    next_date = last_date + timedelta(days=avg_duration)
+    today = date.today()
+    days_since_last = (today - last_date).days
+    
+    # If today is the last day of the current cycle, use today as base for next prediction
+    if days_since_last >= avg_duration - 1:  # -1 because we count from 0
+        next_date = today + timedelta(days=1)  # Next cycle starts tomorrow
+    else:
+        next_date = last_date + timedelta(days=avg_duration)
     
     return next_date, avg_duration, warning
 

@@ -209,3 +209,54 @@ def test_prediction_with_mixed_cycle_lengths():
     # With exponential weights (4,2,1), should predict closer to recent cycles
     assert next_date > date(2025, 8, 15)  # Should be closer to Aug 23 than Aug 1
     assert warning == "Irregular cycle detected"  # Should detect irregularity due to varying lengths
+
+def test_prediction_on_last_day():
+    """Test prediction when today is the last day of the current cycle."""
+    # Mock current date as July 27, 2025 (last day of a 6-day cycle)
+    today = date(2025, 7, 27)
+    events = [
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 2, 15),
+            state="menstruation"
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 3, 15),
+            state="menstruation"
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 4, 10),
+            state="menstruation"
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 5, 12),
+            state="menstruation"
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 6, 16),
+            state="menstruation"
+        ),
+        CycleEvent(
+            user_id="test_user",
+            date=date(2025, 7, 22),
+            state="menstruation"
+        )
+    ]
+    
+    # Monkey patch date.today() for the test
+    import src.services.cycle
+    original_today = src.services.cycle.date.today
+    src.services.cycle.date.today = lambda: today
+    
+    try:
+        next_date, duration, warning = calculate_next_cycle(events)
+        # When we're on the last day, next cycle should start tomorrow
+        assert next_date == today + timedelta(days=1)
+        assert next_date == date(2025, 7, 28)
+    finally:
+        # Restore original date.today
+        src.services.cycle.date.today = original_today
