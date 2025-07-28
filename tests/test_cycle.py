@@ -148,57 +148,41 @@ def test_report_generation():
 
 def test_prediction_with_recent_longer_cycles():
     """Test prediction when recent cycles are longer than historical ones."""
-    # Test case matching the reported scenario
-    events = [
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 6, 16),
-            state="menstruation",
-            pain_level=3
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 7, 22),
-            state="menstruation",
-            pain_level=3
-        )
-    ]
+    # Test case matching the reported scenario with 6-day periods
+    events = []
+    for start_date in [date(2025, 6, 16), date(2025, 7, 22)]:
+        for day in range(6):
+            events.append(CycleEvent(
+                user_id="test_user",
+                date=start_date + timedelta(days=day),
+                state="menstruation",
+                pain_level=3
+            ))
     
     next_date, duration, warning = calculate_next_cycle(events)
     
-    # Should predict 36 days after July 22 (around Aug 23)
+    # With a 6 day period and 36 days between starts, next should be:
+    # Jul 27 (last day of current period) + 31 days = Aug 27
     assert next_date == date(2025, 8, 27)
-    assert duration == 36  # The interval between June 16 and July 22
+    assert duration == 6  # Actual period duration
     assert warning == "Limited data for prediction, using most recent cycle length"
 
 def test_prediction_with_mixed_cycle_lengths():
     """Test prediction with historical shorter cycles but recent longer cycles."""
-    events = [
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 4, 1),
-            state="menstruation",
-            pain_level=3
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 4, 28),
-            state="menstruation",
-            pain_level=3
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 6, 16),
-            state="menstruation",
-            pain_level=3
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 7, 22),
-            state="menstruation",
-            pain_level=3
-        )
-    ]
+    events = []
+    for start_date in [
+        date(2025, 4, 1), 
+        date(2025, 4, 28),
+        date(2025, 6, 16),
+        date(2025, 7, 22)
+    ]:
+        for day in range(6):  # 6-day periods
+            events.append(CycleEvent(
+                user_id="test_user",
+                date=start_date + timedelta(days=day),
+                state="menstruation",
+                pain_level=3
+            ))
     
     next_date, duration, warning = calculate_next_cycle(events)
     
@@ -214,38 +198,19 @@ def test_prediction_on_last_day():
     """Test prediction when today is the last day of the current cycle."""
     # Mock current date as July 27, 2025 (last day of a 6-day cycle)
     today = date(2025, 7, 27)
-    events = [
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 2, 15),
-            state="menstruation"
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 3, 15),
-            state="menstruation"
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 4, 10),
-            state="menstruation"
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 5, 12),
-            state="menstruation"
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 6, 16),
-            state="menstruation"
-        ),
-        CycleEvent(
-            user_id="test_user",
-            date=date(2025, 7, 22),
-            state="menstruation"
-        )
-    ]
+    
+    # Create events with 6 days per period to match history
+    events = []
+    for start_date in [date(2025, 2, 15), date(2025, 3, 15), 
+                      date(2025, 4, 10), date(2025, 5, 12), 
+                      date(2025, 6, 16), date(2025, 7, 22)]:
+        # Add 6 days of menstruation events for each period
+        for day in range(6):
+            events.append(CycleEvent(
+                user_id="test_user",
+                date=start_date + timedelta(days=day),
+                state="menstruation"
+            ))
     
     # Monkey patch date.today() for the test
     import src.services.cycle
@@ -254,9 +219,12 @@ def test_prediction_on_last_day():
     
     try:
         next_date, duration, warning = calculate_next_cycle(events)
+        # Statistics show average period duration of ~6 days
+        # Average days between periods ~24.8 days
         # When we're on the last day, next cycle should start tomorrow
         assert next_date == today + timedelta(days=1)
         assert next_date == date(2025, 7, 28)
+        assert duration == 6  # Should match actual period duration
     finally:
         # Restore original date.today
         src.services.cycle.date.today = original_today

@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from statistics import mean, stdev
 
 from src.models.event import CycleEvent
+from src.services.statistics import calculate_cycle_statistics, find_period_ranges
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType, Phase
 from src.services.phase import get_phase_details
 from src.services.utils import (
@@ -61,40 +62,38 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
             )
         raise ValueError("No menstruation events found for prediction")
     
-    # Calculate intervals between cycles
-    intervals = []
-    for i in range(1, len(menstruation_events)):
-        interval = (menstruation_events[i].date - menstruation_events[i-1].date).days
-        intervals.append(interval)
+    # Get accurate statistics using the statistics service
+    stats = calculate_cycle_statistics(events)
+    period_ranges = find_period_ranges(events)
     
-    # Calculate weighted average giving more importance to recent cycles
-    if len(intervals) >= 3:
-        # Use exponential weights to give more importance to recent intervals
-        # Generate weights in reverse order so most recent interval gets highest weight
-        weights = [2**i for i in range(len(intervals)-1, -1, -1)]
-        weighted_sum = sum(interval * weight for interval, weight in zip(intervals, weights))
-        total_weight = sum(weights)
-        avg_duration = round(weighted_sum / total_weight)
+    if not period_ranges:
+        raise ValueError("No valid period ranges found")
         
-        # Check for cycle irregularity
-        cycle_stddev = stdev(intervals)
-        warning = "Irregular cycle detected" if cycle_stddev > 10 else None
-    else:
-        # If we have less than 3 intervals, use the most recent one
-        avg_duration = intervals[-1]
-        warning = "Limited data for prediction, using most recent cycle length"
+    # Get the last period's end date
+    last_period_end = period_ranges[-1][1]
+    avg_days_between = stats["average_days_between"]
+    warning = None
     
-    last_date = menstruation_events[-1].date
     today = date.today()
-    days_since_last = (today - last_date).days
+    days_since_last_end = (today - last_period_end).days
     
-    # If today is the last day of the current cycle, use today as base for next prediction
-    if days_since_last >= avg_duration - 1:  # -1 because we count from 0
-        next_date = today + timedelta(days=1)  # Next cycle starts tomorrow
+    # If today is within a day of the expected next cycle, predict tomorrow
+    if days_since_last_end >= avg_days_between - 1:
+        next_date = today + timedelta(days=1)
     else:
-        next_date = last_date + timedelta(days=avg_duration)
+        # Otherwise predict based on the last period end date plus average interval
+        next_date = last_period_end + timedelta(days=round(avg_days_between))
     
-    return next_date, avg_duration, warning
+    # Check for irregularity by comparing recent cycles
+    if len(period_ranges) >= 3:
+        recent_intervals = []
+        for i in range(1, len(period_ranges)):
+            interval = (period_ranges[i][0] - period_ranges[i-1][1]).days - 1
+            recent_intervals.append(interval)
+        if stdev(recent_intervals) > 7:  # Using a tighter threshold
+            warning = "Irregular cycle detected"
+            
+    return next_date, round(stats["average_period_duration"]), warning
 
 def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = None) -> Phase:
     """
