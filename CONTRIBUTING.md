@@ -183,7 +183,42 @@ Benefits:
       )
   ```
 
-### 7. Error Handling Guidelines
+### 7. Security Guidelines
+
+- Never reveal bot existence to unauthorized users:
+  ```python
+  # Don't do this:
+  if not auth.check_user_authorized(user_id):
+      telegram.send_message(
+          chat_id=chat_id,
+          text="You are not authorized"  # Don't send any message
+      )
+
+  # Do this instead:
+  if not auth.check_user_authorized(user_id):
+      logger.warning("Unauthorized access attempt", extra={
+          "user_id": user_id
+      })
+      return {
+          "statusCode": 200,
+          "headers": {"Content-Type": "application/json"},
+          "body": json.dumps({"ok": True})  # Silent response
+      }
+  ```
+
+- Log security events appropriately:
+  - Unauthorized access attempts (WARNING level)
+  - Authentication failures (WARNING level)
+  - Successful authorizations (INFO level)
+  - Token/session management (INFO level)
+
+- Handle authorization failures silently:
+  - No error messages to unauthorized users
+  - No indication of bot existence
+  - Return standard Telegram API success response
+  - Internal logging only for monitoring
+
+### 8. Error Handling Guidelines
 
 - Use specific exception types:
   ```python
