@@ -7,6 +7,10 @@ from datetime import datetime
 
 from src.utils.dynamo import DynamoDBClient
 
+class AuthorizationError(Exception):
+    """Raised when there is an error during authorization."""
+    pass
+
 class Authorization:
     """Authorization utility class."""
     

@@ -44,7 +44,25 @@ def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
         # Handle recipe selection callbacks from weekly plan
         if "data" in callback_query and callback_query["data"].startswith("recipe_"):
             from .commands.weeklyplan import handle_recipe_callback
-            return handle_recipe_callback(callback_query)
+            # Convert any stringified JSON in body to dict
+            if isinstance(callback_query.get("data"), str):
+                try:
+                    callback_query = callback_query.copy()
+                    if callback_query["data"].startswith("recipe_"):
+                        # Don't parse recipe callbacks as JSON
+                        pass
+                    else:
+                        callback_query["data"] = json.loads(callback_query["data"])
+                except json.JSONDecodeError:
+                    pass
+            
+            # Wrap callback in a Lambda event structure for middleware
+            wrapped_event = {
+                "body": json.dumps({
+                    "callback_query": callback_query
+                })
+            }
+            return handle_recipe_callback(wrapped_event)
             
         data = json.loads(callback_query["data"])
         

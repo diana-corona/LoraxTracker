@@ -234,7 +234,7 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         }
 
 @require_auth
-def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
+def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle recipe selection callback from inline keyboard.
 
@@ -245,10 +245,12 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
     4. Handles all meal types: breakfast, lunch, dinner, snack
 
     Args:
-        callback_query: The callback query from Telegram containing:
-            - from: Dict with user ID
-            - message: Dict with chat info
-            - data: String in format "recipe_<meal_type>_<recipe_id>"
+        event: Lambda event containing:
+            body: Dict containing:
+                callback_query: The Telegram callback query containing:
+                    - from: Dict with user ID
+                    - message: Dict with chat info
+                    - data: String in format "recipe_<meal_type>_<recipe_id>"
 
     Returns:
         Dict[str, Any]: API Gateway response containing:
@@ -265,12 +267,34 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
         ResourceNotFoundError: If required recipes not found
         Exception: For unexpected errors during selection process
     """
+    # Extract callback query from wrapped event
+    logger.debug("Received recipe callback event", extra={
+        "event_type": type(event).__name__,
+        "has_body": "body" in event,
+        "body_type": type(event.get("body")).__name__ if "body" in event else None,
+    })
+    
+    # Parse body if it's a string
+    body = event["body"]
+    if isinstance(body, str):
+        body = json.loads(body)
+    
+    logger.debug("Parsed callback body", extra={
+        "body_keys": list(body.keys()) if isinstance(body, dict) else None
+    })
+    
+    callback_query = body["callback_query"]
     user_id = str(callback_query['from']['id'])
     chat_id = str(callback_query['message']['chat']['id'])
     callback_data = callback_query['data']
     
     # Extract meal type and recipe id from callback data
     # Format: recipe_<meal_type>_<recipe_id>
+    logger.debug("Processing callback data", extra={
+        "callback_data": callback_data,
+        "data_type": type(callback_data).__name__
+    })
+    
     _, meal_type, recipe_id = callback_data.split('_', 2)
 
     logger.info("Processing recipe selection", extra={
