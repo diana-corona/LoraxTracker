@@ -4,17 +4,40 @@ Weekly plan command module.
 This module provides functionality for generating on-demand weekly plans
 and recipe selections through a Telegram command interface.
 
+The module handles both the initial weekly plan generation and the subsequent
+recipe selection process through interactive Telegram keyboards.
+
 Typical usage:
-    User sends: /weeklyplan
-    Bot responds with a personalized weekly plan and recipe selection options
+    # Initial command
+    User: /weeklyplan
+    Bot: *Displays weekly plan*
+         *Shows breakfast recipe options*
+    
+    # Recipe selection
+    User: *Clicks recipe option*
+    Bot: *Shows next meal type options*
+         *Continues until all meals selected*
+         *Finally shows shopping list*
+
+Components:
+    - handle_weeklyplan_command: Primary command handler
+    - handle_recipe_callback: Handles recipe selection interactions
+    - RecipeSelectionStorage: Manages recipe selection state
 """
 import json
 from typing import Optional, Dict, Any, List
 
 from aws_lambda_powertools import Logger
+from src.handlers.telegram.exceptions import (
+    NoEventsError,
+    WeeklyPlanError,
+    RecipeSelectionError,
+    RecipeNotFoundError
+)
 from src.utils.telegram.keyboards import create_recipe_selection_keyboard
 from src.services.recipe import RecipeService
 from src.services.recipe_selection_storage import RecipeSelectionStorage
+from src.services.shopping_list import ShoppingListService
 from src.utils.middleware import require_auth
 
 from src.utils.dynamo import create_pk
@@ -33,33 +56,33 @@ MEAL_EMOJIS = {
     'snack': '🍿'
 }
 
-# Shopping list category emojis
-SHOPPING_ICONS = {
-    'proteins': '🥩',
-    'produce': '🥬',
-    'dairy': '🥛',
-    'baking': '🥖',
-    'nuts': '🥜',
-    'condiments': '🫙',
-    'pantry': '🏠'
-}
-
 def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
-    Handle /weeklyplan command to generate an on-demand weekly plan and start recipe selection.
+    Handle /weeklyplan command to generate a weekly plan and start recipe selection.
 
-    This handler retrieves cycle events, generates a personalized weekly plan,
-    and initiates the recipe selection process for the user's current phase.
+    This handler orchestrates the weekly plan generation process:
+    1. Retrieves user's cycle events
+    2. Generates a personalized weekly plan based on cycle phase
+    3. Formats and sends the plan to the user
+    4. Initiates recipe selection workflow starting with breakfast
 
     Args:
-        user_id: The Telegram user ID
-        chat_id: The Telegram chat ID
+        user_id: The Telegram user ID to generate plan for
+        chat_id: The Telegram chat ID to send responses to
 
     Returns:
-        Dict containing the response status and message
+        Dict[str, Any]: API Gateway response containing:
+            {
+                "statusCode": int,
+                "headers": Dict[str, str],
+                "body": str,
+                "isBase64Encoded": bool
+            }
 
     Raises:
-        ValueError: If no cycle events found
+        ValueError: If no cycle events found for the user
+        ResourceNotFoundError: If required recipes not found
+        AuthorizationError: If user is not authorized
         Exception: For unexpected errors during plan generation
     """
     
@@ -86,10 +109,12 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         ]
         
         if not cycle_events:
-            logger.warning("No cycle events found", extra={
-                "user_id": user_id
+            logger.warning("No cycle events found for user", extra={
+                "user_id": user_id,
+                "event_count": 0,
+                "action": "weekly_plan_generation"
             })
-            raise ValueError("No cycle events found. Please register some events first.")
+            raise NoEventsError("No cycle events found. Please register some events first.")
             
         # Generate and format weekly plan
         weekly_plan = generate_weekly_plan(cycle_events)
@@ -143,11 +168,46 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             "isBase64Encoded": False
         }
         
-    except ValueError as e:
+    except NoEventsError as e:
+        logger.warning("Weekly plan generation failed - no events", extra={
+            "user_id": user_id,
+            "error": str(e),
+            "error_type": "NO_EVENTS"
+        })
         telegram.send_message(
             chat_id=chat_id,
             text=f"⚠️ {str(e)}"
         )
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "ok": False,
+                "error_code": "NO_EVENTS",
+                "description": str(e)
+            }),
+            "isBase64Encoded": False
+        }
+    except WeeklyPlanError as e:
+        logger.error("Weekly plan generation failed", extra={
+            "user_id": user_id,
+            "error": str(e),
+            "error_type": "WEEKLY_PLAN_ERROR"
+        })
+        telegram.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ Error generating weekly plan: {str(e)}"
+        )
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "ok": False,
+                "error_code": "WEEKLY_PLAN_ERROR",
+                "description": str(e)
+            }),
+            "isBase64Encoded": False
+        }
     except Exception as e:
         logger.exception(
             "Error generating weekly plan",
@@ -178,11 +238,32 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle recipe selection callback from inline keyboard.
 
+    Processes user's recipe selections through the meal planning workflow:
+    1. Updates selection storage with chosen recipe
+    2. Determines next meal type to select
+    3. Either shows next meal options or generates shopping list
+    4. Handles all meal types: breakfast, lunch, dinner, snack
+
     Args:
-        callback_query: The callback query from Telegram
+        callback_query: The callback query from Telegram containing:
+            - from: Dict with user ID
+            - message: Dict with chat info
+            - data: String in format "recipe_<meal_type>_<recipe_id>"
 
     Returns:
-        Dict containing the response status and message
+        Dict[str, Any]: API Gateway response containing:
+            {
+                "statusCode": int,
+                "headers": Dict[str, str],
+                "body": str,
+                "isBase64Encoded": bool
+            }
+
+    Raises:
+        AuthorizationError: If user is not authorized
+        ValueError: If callback data is malformed
+        ResourceNotFoundError: If required recipes not found
+        Exception: For unexpected errors during selection process
     """
     user_id = str(callback_query['from']['id'])
     chat_id = str(callback_query['message']['chat']['id'])
@@ -201,9 +282,15 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
     telegram = get_telegram()
 
     try:
+        if not callback_data.startswith('recipe_'):
+            raise RecipeSelectionError("Invalid callback data format")
+
         # Update selection storage
-        RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id)
-        selection = RecipeSelectionStorage.get_selection(user_id)
+        try:
+            RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id)
+            selection = RecipeSelectionStorage.get_selection(user_id)
+        except Exception as e:
+            raise RecipeSelectionError(f"Failed to update recipe selection: {str(e)}")
 
         # Get current phase
         events = get_dynamo().query_items(
@@ -238,38 +325,19 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
                 reply_markup=keyboard
             )
         else:
-            # Get all selected recipe IDs
+            # Get selected recipes and generate shopping list
             selected_recipe_ids = list(selection.to_dict().values())
-
-            # Get combined ingredients for all selected recipes
             ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
-
-            # Generate formatted shopping list
-            shopping_list = ["🛒 Shopping List\n"]
             
-            # Add non-pantry ingredients by category
-            for category in ['proteins', 'produce', 'dairy', 'condiments', 'baking', 'nuts']:
-                items = getattr(ingredients, category)
-                if items:
-                    emoji = SHOPPING_ICONS.get(category, '•')
-                    shopping_list.extend([
-                        f"\n{emoji} {category.title()}:",
-                        *[f"  • {item}" for item in sorted(items)]
-                    ])
+            # Generate and format shopping list
+            shopping_service = ShoppingListService()
+            shopping_list = shopping_service.generate_list(ingredients)
+            formatted_list = shopping_service.format_list(shopping_list, recipe_service)
 
-            # Add pantry items note if any were used
-            pantry_items = [item for item in ingredients.pantry if recipe_service.is_pantry_item(item)]
-            if pantry_items:
-                shopping_list.extend([
-                    "\n🏠 Pantry Items to Check:",
-                    "(These basic ingredients are assumed to be in most kitchens)",
-                    *[f"  • {item}" for item in sorted(pantry_items)]
-                ])
-
-            # Send final list
+            # Send shopping list
             telegram.send_message(
                 chat_id=chat_id,
-                text="\n".join(shopping_list)
+                text=formatted_list
             )
 
         return {
@@ -279,11 +347,57 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
             "isBase64Encoded": False
         }
 
+    except RecipeSelectionError as e:
+        logger.error("Recipe selection error", extra={
+            "user_id": user_id,
+            "meal_type": meal_type,
+            "recipe_id": recipe_id,
+            "error": str(e),
+            "error_type": "RECIPE_SELECTION_ERROR"
+        })
+        telegram.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ Error selecting recipe: {str(e)}"
+        )
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "ok": False,
+                "error_code": "RECIPE_SELECTION_ERROR",
+                "description": str(e)
+            }),
+            "isBase64Encoded": False
+        }
+    except RecipeNotFoundError as e:
+        logger.error("Required recipes not found", extra={
+            "user_id": user_id,
+            "meal_type": meal_type,
+            "phase_type": phase_type if 'phase_type' in locals() else None,
+            "error": str(e),
+            "error_type": "RECIPE_NOT_FOUND"
+        })
+        telegram.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ Could not find required recipes: {str(e)}"
+        )
+        return {
+            "statusCode": 404,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "ok": False,
+                "error_code": "RECIPE_NOT_FOUND",
+                "description": str(e)
+            }),
+            "isBase64Encoded": False
+        }
     except Exception as e:
         logger.exception(
-            "Error processing recipe selection",
+            "Unexpected error in recipe selection",
             extra={
                 "user_id": user_id,
+                "meal_type": meal_type,
+                "recipe_id": recipe_id,
                 "error_type": e.__class__.__name__
             }
         )
