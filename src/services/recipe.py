@@ -75,26 +75,58 @@ class RecipeService:
             'nurture': {},
             'manifestation': {}
         }
-        self._load_recipes()
 
-    def _load_recipes(self) -> None:
-        """Load all recipes from the recipes directory."""
-        recipes_dir = Path("recipes")
-        for recipe_dir in recipes_dir.glob("**/[!.]*"):  # Ignore hidden directories
-            if recipe_dir.is_dir() and recipe_dir.name not in {'to-process', 'uncategorized'}:
-                phase = recipe_dir.name  # Directory name indicates phase
-                for recipe_file in recipe_dir.glob("*.md"):
-                    if recipe_file.name != 'TEMPLATE_RECIPE.md':
-                        try:
-                            recipe = self.parser.parse_recipe_file(str(recipe_file))
-                            if recipe:
+    def load_recipes_for_meal_planning(self, phase: str) -> None:
+        """
+        Load a limited set of recipes for meal planning (2 per meal type) for a specific phase.
+        
+        Args:
+            phase: The phase to load recipes for (power, nurture, manifestation)
+        """
+        if phase not in self._phase_recipes:
+            logger.warning(f"Invalid phase: {phase}")
+            return
+
+        # Clear existing recipes
+        self._recipes.clear()
+        for p in self._phase_recipes:
+            self._phase_recipes[p].clear()
+
+        recipes_dir = Path("recipes") / phase
+        if not recipes_dir.is_dir():
+            logger.warning(f"Recipe directory not found for phase: {phase}")
+            return
+
+        meal_type_counts = {
+            'breakfast': 0,
+            'lunch': 0,
+            'dinner': 0,
+            'snack': 0
+        }
+
+        # Load up to 2 recipes per meal type
+        for recipe_file in recipes_dir.glob("*.md"):
+            if recipe_file.name != 'TEMPLATE_RECIPE.md':
+                try:
+                    recipe = self.parser.parse_recipe_file(str(recipe_file))
+                    if recipe:
+                        # Check if this recipe matches a meal type we need more of
+                        for meal_type, count in meal_type_counts.items():
+                            if meal_type in recipe.tags and count < 2:
                                 recipe_id = recipe_file.stem
                                 self._recipes[recipe_id] = recipe
-                                if phase in self._phase_recipes:
-                                    self._phase_recipes[phase][recipe_id] = recipe
-                                logger.info(f"Loaded recipe: {recipe.title} for phase {phase}")
-                        except Exception as e:
-                            logger.error(f"Error loading recipe {recipe_file}: {str(e)}")
+                                self._phase_recipes[phase][recipe_id] = recipe
+                                meal_type_counts[meal_type] += 1
+                                logger.info(f"Loaded {meal_type} recipe: {recipe.title} for phase {phase}")
+                                break  # Stop checking meal types once we've categorized this recipe
+
+                        # Check if we have enough recipes
+                        if all(count >= 2 for count in meal_type_counts.values()):
+                            break
+                except Exception as e:
+                    logger.error(f"Error loading recipe {recipe_file}: {str(e)}")
+
+        logger.info(f"Loaded recipes for meal planning - Phase: {phase}, Counts: {meal_type_counts}")
 
     def get_recipe_by_id(self, recipe_id: str) -> Optional[Recipe]:
         """Get recipe by its ID (filename without extension)."""

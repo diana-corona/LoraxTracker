@@ -114,8 +114,9 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         current_phase = analyze_cycle_phase(cycle_events)
         phase_type = current_phase.functional_phase.value
         
-        # Start recipe selection process with phase-specific recipes
+        # Load and select phase-specific recipes for meal planning
         recipe_service = RecipeService()
+        recipe_service.load_recipes_for_meal_planning(phase=phase_type)
         breakfast_recipes = recipe_service.get_recipes_by_meal_type('breakfast', phase=phase_type, limit=2)
         keyboard = create_recipe_selection_keyboard(breakfast_recipes, 'breakfast')
 
@@ -217,6 +218,7 @@ def handle_recipe_callback(callback_query: Dict[str, Any]) -> Dict[str, Any]:
 
         # Get recipes for next selection
         recipe_service = RecipeService()
+        recipe_service.load_recipes_for_meal_planning(phase=phase_type)
 
         # Determine next meal type to select
         meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
