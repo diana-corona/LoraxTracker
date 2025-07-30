@@ -1,11 +1,12 @@
 """
 Recipe data models for meal plan integration.
 
-This module provides data structures for representing recipes and meal recommendations
-within the hormonal cycle tracking system.
+This module provides data structures for representing recipes, meal recommendations,
+and recipe history within the hormonal cycle tracking system.
 """
 from dataclasses import dataclass
 from typing import List, Optional
+from datetime import datetime
 
 from src.models.phase import FunctionalPhaseType
 
@@ -57,6 +58,27 @@ class MealRecommendation:
     recipes: List[Recipe]
     prep_time_total: int
 
+
+@dataclass
+class RecipeHistory:
+    """
+    Model representing a recipe shown to a user.
+    
+    Tracks when recipes were shown as options during meal planning to
+    support recipe rotation and avoid repetition.
+    
+    Attributes:
+        user_id: The Telegram user ID
+        recipe_id: Recipe identifier (filename without extension)
+        meal_type: Type of meal (breakfast, lunch, dinner, snack)
+        phase: The hormonal phase when recipe was shown
+        shown_at: ISO format date when recipe was shown as an option
+    """
+    user_id: str
+    recipe_id: str
+    meal_type: str
+    phase: str
+    shown_at: str
 
 @dataclass
 class RecipeRecommendations:

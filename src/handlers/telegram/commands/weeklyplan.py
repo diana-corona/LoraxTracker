@@ -143,10 +143,20 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
         current_phase = analyze_cycle_phase(cycle_events)
         phase_type = current_phase.functional_phase.value
         
-        # Load and select phase-specific recipes for meal planning
+        # Load and select phase-specific recipes for meal planning with rotation
         recipe_service = RecipeService()
-        recipe_service.load_recipes_for_meal_planning(phase=phase_type)
+        recipe_service.load_recipes_for_meal_planning(phase=phase_type, user_id=user_id)
+        
+        # Get breakfast recipes and save to history
         breakfast_recipes = recipe_service.get_recipes_by_meal_type('breakfast', phase=phase_type, limit=2)
+        for recipe in breakfast_recipes:
+            recipe_service.save_recipe_history(
+                user_id=user_id,
+                recipe_id=recipe['id'],
+                meal_type='breakfast',
+                phase=phase_type
+            )
+        
         keyboard = create_recipe_selection_keyboard(breakfast_recipes, 'breakfast')
 
         # Send recipe selection message
@@ -349,6 +359,16 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             # Show next meal selection with phase-specific options
             next_meal = meal_types[current_idx + 1]
             next_recipes = recipe_service.get_recipes_by_meal_type(next_meal, phase=phase_type, limit=2)
+            
+            # Save shown recipes to history
+            for recipe in next_recipes:
+                recipe_service.save_recipe_history(
+                    user_id=user_id,
+                    recipe_id=recipe['id'],
+                    meal_type=next_meal,
+                    phase=phase_type
+                )
+                
             keyboard = create_recipe_selection_keyboard(next_recipes, next_meal)
             
             telegram.send_message(

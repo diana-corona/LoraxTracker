@@ -2,9 +2,12 @@
 Recipe service for managing recipes and their ingredients.
 """
 import os
+from datetime import datetime, timedelta
+import time
 from typing import Dict, List, Set, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
+from boto3.dynamodb.conditions import Key
 
 try:
     from aws_lambda_powertools import Logger
@@ -16,7 +19,8 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 from src.utils.recipe_parser import RecipeMarkdownParser
-from src.models.recipe import Recipe
+from src.models.recipe import Recipe, RecipeHistory
+from src.utils.dynamo import get_dynamo, create_pk, create_recipe_history_sk
 
 @dataclass
 class CategorizedIngredients:
@@ -67,7 +71,7 @@ class RecipeService:
     }
 
     def __init__(self):
-        """Initialize recipe service with parser."""
+        """Initialize recipe service with parser and DynamoDB client."""
         self.parser = RecipeMarkdownParser()
         self._recipes: Dict[str, Recipe] = {}
         self._phase_recipes: Dict[str, Dict[str, Recipe]] = {
@@ -75,13 +79,69 @@ class RecipeService:
             'nurture': {},
             'manifestation': {}
         }
+        self.dynamo = get_dynamo()
 
-    def load_recipes_for_meal_planning(self, phase: str) -> None:
+    def get_recipe_history(self, user_id: str, days: int = 30) -> List[str]:
+        """
+        Get recipes shown to user in last N days.
+        
+        Args:
+            user_id: Telegram user ID to get history for
+            days: Number of days of history to look back (default 30)
+            
+        Returns:
+            List of recipe IDs that were shown to the user
+        """
+        start_date = (datetime.now() - timedelta(days=days)).isoformat()
+        items = self.dynamo.query_items(
+            partition_key="PK",
+            partition_value=create_pk(user_id),
+            sort_key_condition=Key('SK').begins_with('RECIPE#')
+        )
+        # Extract recipe_id from RECIPE#recipe_id#date format
+        return [item['SK'].split('#')[1] for item in items]
+
+    def save_recipe_history(
+        self, 
+        user_id: str, 
+        recipe_id: str,
+        meal_type: str,
+        phase: str
+    ) -> None:
+        """
+        Save recipe selection to history.
+        
+        Args:
+            user_id: Telegram user ID
+            recipe_id: Recipe identifier (filename without extension)
+            meal_type: Type of meal (breakfast, lunch, dinner, snack)
+            phase: The hormonal phase when recipe was shown
+        """
+        now = datetime.now().isoformat()
+        ttl = int(time.time()) + (30 * 24 * 60 * 60)  # 30 days
+        
+        self.dynamo.put_item({
+            'PK': create_pk(user_id),
+            'SK': create_recipe_history_sk(recipe_id, now),
+            'meal_type': meal_type,
+            'phase': phase,
+            'ttl': ttl
+        })
+        
+        logger.info("Saved recipe history", extra={
+            "user_id": user_id,
+            "recipe_id": recipe_id,
+            "meal_type": meal_type,
+            "phase": phase
+        })
+
+    def load_recipes_for_meal_planning(self, phase: str, user_id: Optional[str] = None) -> None:
         """
         Load a limited set of recipes for meal planning (2 per meal type) for a specific phase.
         
         Args:
             phase: The phase to load recipes for (power, nurture, manifestation)
+            user_id: Optional user ID to enable recipe rotation
         """
         if phase not in self._phase_recipes:
             logger.warning(f"Invalid phase: {phase}")
@@ -91,6 +151,24 @@ class RecipeService:
         self._recipes.clear()
         for p in self._phase_recipes:
             self._phase_recipes[p].clear()
+
+        # Get recently shown recipes if user_id provided
+        recent_recipes = set()
+        if user_id:
+            try:
+                recent_recipes = set(self.get_recipe_history(user_id))
+                logger.info("Retrieved recipe history", extra={
+                    "user_id": user_id,
+                    "recent_count": len(recent_recipes)
+                })
+            except Exception as e:
+                logger.warning(
+                    "Failed to get recipe history, proceeding without rotation",
+                    extra={
+                        "user_id": user_id,
+                        "error": str(e)
+                    }
+                )
 
         recipes_dir = Path("recipes") / phase
         if not recipes_dir.is_dir():
@@ -104,27 +182,86 @@ class RecipeService:
             'snack': 0
         }
 
-        # Load up to 2 recipes per meal type
-        for recipe_file in recipes_dir.glob("*.md"):
-            if recipe_file.name != 'TEMPLATE_RECIPE.md':
-                try:
-                    recipe = self.parser.parse_recipe_file(str(recipe_file))
-                    if recipe:
-                        # Check if this recipe matches a meal type we need more of
-                        for meal_type, count in meal_type_counts.items():
-                            if meal_type in recipe.tags and count < 2:
-                                recipe_id = recipe_file.stem
-                                self._recipes[recipe_id] = recipe
-                                self._phase_recipes[phase][recipe_id] = recipe
-                                meal_type_counts[meal_type] += 1
-                                logger.info(f"Loaded {meal_type} recipe: {recipe.title} for phase {phase}")
-                                break  # Stop checking meal types once we've categorized this recipe
+        # Load all available recipes
+        recipe_files = [f for f in recipes_dir.glob("*.md") if f.name != 'TEMPLATE_RECIPE.md']
+        fresh_recipes = [f for f in recipe_files if f.stem not in recent_recipes]
+        fallback_recipes = [f for f in recipe_files if f.stem in recent_recipes]
 
-                        # Check if we have enough recipes
-                        if all(count >= 2 for count in meal_type_counts.values()):
-                            break
-                except Exception as e:
-                    logger.error(f"Error loading recipe {recipe_file}: {str(e)}")
+        def load_recipe(recipe_file: Path) -> Optional[Recipe]:
+            """Helper to load a recipe file safely."""
+            try:
+                return self.parser.parse_recipe_file(str(recipe_file))
+            except Exception as e:
+                logger.error(f"Error loading recipe {recipe_file}: {str(e)}")
+                return None
+
+        # Index recipes by meal type
+        meal_type_fresh_recipes: Dict[str, List[tuple[Path, Recipe]]] = {
+            'breakfast': [],
+            'lunch': [],
+            'dinner': [],
+            'snack': []
+        }
+
+        # First pass: Index all fresh recipes by meal type
+        for recipe_file in fresh_recipes:
+            recipe = load_recipe(recipe_file)
+            if recipe:
+                for meal_type in meal_type_counts.keys():
+                    if meal_type in recipe.tags:
+                        meal_type_fresh_recipes[meal_type].append((recipe_file, recipe))
+        
+        # Process fresh recipes for each meal type
+        for meal_type in meal_type_counts.keys():
+            fresh_recipes_for_type = sorted(
+                [(f, r) for f, r in meal_type_fresh_recipes[meal_type]],
+                key=lambda x: x[0].stem
+            )
+            
+            # Sort all fresh recipes for this meal type
+            sorted_recipes = sorted(fresh_recipes_for_type, key=lambda x: x[0].stem)
+            
+            # First try to load all fresh recipes
+            for recipe_file, recipe in sorted_recipes:
+                recipe_id = recipe_file.stem
+                # Skip if we already have enough recipes
+                if meal_type_counts[meal_type] >= 2:
+                    break
+                    
+                self._recipes[recipe_id] = recipe
+                self._phase_recipes[phase][recipe_id] = recipe
+                meal_type_counts[meal_type] += 1
+                logger.info(
+                    f"Loaded fresh {meal_type} recipe: {recipe.title}",
+                    extra={
+                        "recipe_id": recipe_id,
+                        "phase": phase,
+                        "is_fresh": True
+                    }
+                )
+
+            # Only use fallbacks if we have no fresh recipes at all
+            if meal_type_counts[meal_type] == 0:
+                # Try fallback recipes
+                for recipe_file in fallback_recipes:
+                    # Skip if we have enough recipes
+                    if meal_type_counts[meal_type] >= 2:
+                        break
+                        
+                    recipe = load_recipe(recipe_file)
+                    if recipe and meal_type in recipe.tags:
+                        recipe_id = recipe_file.stem
+                        self._recipes[recipe_id] = recipe
+                        self._phase_recipes[phase][recipe_id] = recipe
+                        meal_type_counts[meal_type] += 1
+                        logger.info(
+                            f"Loaded fallback {meal_type} recipe: {recipe.title}",
+                            extra={
+                                "recipe_id": recipe_id,
+                                "phase": phase,
+                                "is_fresh": False
+                            }
+                        )
 
         logger.info(f"Loaded recipes for meal planning - Phase: {phase}, Counts: {meal_type_counts}")
 

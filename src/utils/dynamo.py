@@ -1,9 +1,21 @@
 """
 DynamoDB utility functions for data access.
 """
+import os
 from typing import Dict, List, Optional, Any
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
+
+# Singleton instance
+_dynamo_instance = None
+
+def get_dynamo():
+    """Get or create singleton DynamoDB client instance."""
+    global _dynamo_instance
+    if _dynamo_instance is None:
+        table_name = os.environ.get('DYNAMODB_TABLE', 'lorax-tracker-dev')
+        _dynamo_instance = DynamoDBClient(table_name)
+    return _dynamo_instance
 
 class DynamoDBClient:
     """Client for interacting with DynamoDB table."""
@@ -108,3 +120,19 @@ def create_event_sk(date_str: str) -> str:
 def create_recommendation_sk(date_str: str) -> str:
     """Create sort key for recommendations."""
     return f"REC#{date_str}"
+
+def create_recipe_history_sk(recipe_id: str, date_str: str) -> str:
+    """
+    Create sort key for recipe history entries.
+    
+    Used to track which recipes have been shown to users during meal planning
+    to support recipe rotation and avoid repetition.
+
+    Args:
+        recipe_id: Recipe identifier (filename without extension)
+        date_str: ISO format date string when recipe was shown
+
+    Returns:
+        Sort key in format "RECIPE#{recipe_id}#{date_str}"
+    """
+    return f"RECIPE#{recipe_id}#{date_str}"
