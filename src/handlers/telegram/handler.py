@@ -53,12 +53,28 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         API Gateway Lambda proxy response
     """
     try:
+        # Log raw incoming event for debugging
+        logger.debug("Received webhook event", extra={
+            "raw_event": event,
+            "event_type": type(event).__name__,
+            "has_body": "body" in event,
+            "body_type": type(event.get("body")).__name__ if "body" in event else None
+        })
+
         body = json.loads(event["body"])
+        
+        # Log parsed body
+        logger.debug("Parsed webhook body", extra={
+            "raw_body": body,
+            "body_keys": list(body.keys()) if isinstance(body, dict) else None,
+            "message_type": "callback_query" if "callback_query" in body else "message" if "message" in body else "unknown"
+        })
         
         # Extract message details and enhance logging
         user_id = None
         command = None
         
+        # Extract user_id and details for both messages and callback queries
         if "message" in body:
             chat = body["message"]["chat"]
             user = body["message"]["from"]
@@ -76,8 +92,16 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                 "chat_type": chat.get("type", "private"),
                 "message_type": "command" if text.startswith('/') else "text",
                 "command": command,
-                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None,
+                "raw_message": body["message"],  # Log raw message for debugging
+                "message_id": body["message"].get("message_id"),
+                "date": body["message"].get("date")
             })
+        elif "callback_query" in body:
+            callback = body["callback_query"]
+            user = callback["from"]
+            chat = callback["message"]["chat"]
+            user_id = str(user["id"])
             
         # Check for admin commands before authorization
         if command in ["/allow", "/revoke"] and user_id in os.environ.get("ADMIN_USER_IDS", "").split(","):
@@ -86,13 +110,15 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         
         # For non-admin commands, apply authorization check
         if not auth.check_user_authorized(user_id):
+            # Enhanced logging for unauthorized attempts
             logger.warning("Unauthorized access attempt", extra={
                 "user_id": user_id,
-                "username": user.get("username") if "message" in body else None,
-                "chat_id": str(chat["id"]) if "message" in body else None,
-                "chat_type": chat.get("type", "private") if "message" in body else None,
+                "username": user.get("username", None),
+                "chat_id": str(chat["id"]),
+                "chat_type": chat.get("type", "private"),
                 "command": command,
-                "group_title": chat.get("title") if "message" in body and chat.get("type") in ["group", "supergroup"] else None
+                "interaction_type": "callback_query" if "callback_query" in body else "message",
+                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
             })
             return {
                 "statusCode": 200,
@@ -113,7 +139,10 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                 "chat_id": str(chat["id"]),
                 "chat_type": chat.get("type", "private"),
                 "callback_data": callback["data"],
-                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None,
+                "raw_callback_query": callback,  # Log raw callback for debugging
+                "message_id": callback["message"].get("message_id"),
+                "callback_query_id": callback.get("id")
             })
             
             return handle_callback_query(callback)

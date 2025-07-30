@@ -24,6 +24,8 @@ Components:
     - handle_recipe_callback: Handles recipe selection interactions
     - RecipeSelectionStorage: Manages recipe selection state
 """
+
+from datetime import datetime
 import json
 from typing import Optional, Dict, Any, List
 
@@ -38,7 +40,6 @@ from src.utils.telegram.keyboards import create_recipe_selection_keyboard
 from src.services.recipe import RecipeService
 from src.services.recipe_selection_storage import RecipeSelectionStorage
 from src.services.shopping_list import ShoppingListService
-from src.utils.middleware import require_auth
 
 from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
@@ -56,7 +57,7 @@ MEAL_EMOJIS = {
     'snack': '🍿'
 }
 
-def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
+def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Handle /weeklyplan command to generate a weekly plan and start recipe selection.
 
@@ -88,7 +89,9 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     
     logger.info("Processing weeklyplan command", extra={
         "user_id": user_id,
-        "chat_id": chat_id
+        "chat_id": chat_id,
+        "message": message,  # Log the full message for debugging
+        "timestamp": datetime.now().isoformat()
     })
 
     # Get clients lazily
@@ -233,7 +236,6 @@ def handle_weeklyplan_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             "isBase64Encoded": False
         }
 
-@require_auth
 def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle recipe selection callback from inline keyboard.
@@ -272,6 +274,7 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         "event_type": type(event).__name__,
         "has_body": "body" in event,
         "body_type": type(event.get("body")).__name__ if "body" in event else None,
+        "raw_event": event  # Log the full event for debugging
     })
     
     # Parse body if it's a string
@@ -288,11 +291,16 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
     chat_id = str(callback_query['message']['chat']['id'])
     callback_data = callback_query['data']
     
-    # Extract meal type and recipe id from callback data
-    # Format: recipe_<meal_type>_<recipe_id>
-    logger.debug("Processing callback data", extra={
+    # Enhanced callback logging
+    logger.debug("Processing callback query", extra={
+        "user_id": user_id,
+        "chat_id": chat_id,
         "callback_data": callback_data,
-        "data_type": type(callback_data).__name__
+        "message_id": callback_query['message'].get('message_id'),
+        "callback_query_id": callback_query.get('id'),
+        "from_user": callback_query['from'],
+        "chat_type": callback_query['message']['chat'].get('type'),
+        "full_callback_query": callback_query  # Log full callback for debugging
     })
     
     _, meal_type, recipe_id = callback_data.split('_', 2)
@@ -377,7 +385,8 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             "meal_type": meal_type,
             "recipe_id": recipe_id,
             "error": str(e),
-            "error_type": "RECIPE_SELECTION_ERROR"
+            "error_type": "RECIPE_SELECTION_ERROR",
+            "raw_event": event  # Log raw event for debugging
         })
         telegram.send_message(
             chat_id=chat_id,
@@ -399,7 +408,8 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             "meal_type": meal_type,
             "phase_type": phase_type if 'phase_type' in locals() else None,
             "error": str(e),
-            "error_type": "RECIPE_NOT_FOUND"
+            "error_type": "RECIPE_NOT_FOUND",
+            "raw_event": event  # Log raw event for debugging
         })
         telegram.send_message(
             chat_id=chat_id,
@@ -419,10 +429,11 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         logger.exception(
             "Unexpected error in recipe selection",
             extra={
-                "user_id": user_id,
-                "meal_type": meal_type,
-                "recipe_id": recipe_id,
-                "error_type": e.__class__.__name__
+            "user_id": user_id,
+            "meal_type": meal_type,
+            "recipe_id": recipe_id,
+            "error_type": e.__class__.__name__,
+            "raw_event": event  # Log raw event for debugging
             }
         )
         telegram.send_message(

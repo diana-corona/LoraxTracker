@@ -185,6 +185,19 @@ Benefits:
 
 ### 7. Security Guidelines
 
+- **Centralized Authorization**: All authorization is handled by the main webhook handler (`src/handlers/telegram/handler.py`):
+  ```python
+  # Authorization is centralized in the handler for ALL interactions
+  # including both regular messages and callback queries (button clicks)
+  if not auth.check_user_authorized(user_id):
+      logger.warning("Unauthorized access attempt")
+      return silent_success_response()
+  ```
+  - Do NOT add authorization checks in individual command handlers
+  - Do NOT use the @require_auth decorator (it's redundant)
+  - All user interactions (messages, buttons, etc.) are authorized at entry
+  - This prevents security holes and unauthorized access attempts
+
 - Never reveal bot existence to unauthorized users:
   ```python
   # Don't do this:
