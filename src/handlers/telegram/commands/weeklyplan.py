@@ -357,20 +357,31 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                 reply_markup=keyboard
             )
         else:
-            # Get selected recipes and generate shopping list
-            selected_recipe_ids = list(selection.to_dict().values())
-            ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
+            # Get selected recipes (excluding skipped meals)
+            selections = selection.to_dict()
+            selected_recipe_ids = [
+                recipe_id for recipe_id in selections.values() 
+                if recipe_id != 'skip'
+            ]
             
-            # Generate and format shopping list
-            shopping_service = ShoppingListService()
-            shopping_list = shopping_service.generate_list(ingredients)
-            formatted_list = shopping_service.format_list(shopping_list, recipe_service)
+            if not selected_recipe_ids:
+                # All meals were skipped
+                telegram.send_message(
+                    chat_id=chat_id,
+                    text="No shopping list generated as all meals were skipped."
+                )
+            else:
+                # Generate and format shopping list for selected meals
+                ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
+                shopping_service = ShoppingListService()
+                shopping_list = shopping_service.generate_list(ingredients)
+                formatted_list = shopping_service.format_list(shopping_list, recipe_service)
 
-            # Send shopping list
-            telegram.send_message(
-                chat_id=chat_id,
-                text=formatted_list
-            )
+                # Send shopping list
+                telegram.send_message(
+                    chat_id=chat_id,
+                    text=formatted_list
+                )
 
         return {
             "statusCode": 200,

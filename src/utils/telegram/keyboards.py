@@ -70,12 +70,18 @@ def create_recipe_selection_keyboard(recipes: List[Dict[str, Any]], meal_type: s
         meal_type: Type of meal (breakfast, lunch, dinner, snack)
         
     Returns:
-        InlineKeyboardMarkup with recipe options
+        InlineKeyboardMarkup with recipe options and skip option
     """
     buttons = []
     for recipe in recipes:
         callback_data = f"recipe_{meal_type}_{recipe['id']}"
         button_text = f"{recipe['title']} ({recipe['prep_time']} min)"
         buttons.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+    
+    # Add skip meal option
+    skip_callback_data = f"recipe_{meal_type}_skip"
+    skip_button = [InlineKeyboardButton("Skip this meal 🚫", callback_data=skip_callback_data)]
+    buttons.append(skip_button)
+    
     markup = InlineKeyboardMarkup(buttons)
     return to_dict(markup)

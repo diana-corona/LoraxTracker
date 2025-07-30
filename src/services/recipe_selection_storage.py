@@ -12,12 +12,12 @@ class RecipeSelection:
     snack: Optional[str] = None
 
     def is_complete(self) -> bool:
-        """Check if all meal types have been selected."""
+        """Check if all meal types have been selected (including skips)."""
         return all([
-            self.breakfast,
-            self.lunch,
-            self.dinner,
-            self.snack
+            self.breakfast is not None,  # Either recipe ID or "skip"
+            self.lunch is not None,
+            self.dinner is not None,
+            self.snack is not None
         ])
 
     def to_dict(self) -> Dict[str, str]:
