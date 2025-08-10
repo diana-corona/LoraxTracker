@@ -14,21 +14,17 @@ provider:
     ADMIN_USER_IDS: ${ssm:/lorax/admin-users}
     STAGE: ${sls:stage}
     TRACKER_TABLE_NAME: !Ref TrackerTable
+    LOG_LEVEL: DEBUG  # Enable debug logging
+  logRetentionInDays: 7
+  tracing:  # Enable AWS X-Ray tracing
+    lambda: true
+    apiGateway: true
   apiGateway:
     apiKeys:
       - name: loraxApiKey
         description: API key for Lorax Tracker webhook
   iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - dynamodb:*
-          Resource: !GetAtt TrackerTable.Arn
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/lorax/*
+    role: !GetAtt TelegramRole.Arn
 
 plugins:
   - serverless-python-requirements
@@ -40,7 +36,7 @@ custom:
     number: 2
   pythonRequirements:
     layer:
-      name: lorax-dependencies
+      name: ${self:service}-${sls:stage}-python
       description: Python dependencies for Lorax Tracker
     noDeploy:
       - pytest
@@ -70,22 +66,100 @@ functions:
           private: false
     timeout: 29
     memorySize: 256
+    environment:
+      LOG_LEVEL: DEBUG
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
+      - { Ref: PythonRequirementsLambdaLayer }
 
   weekly_plan:
     handler: src.handlers.weekly_plan.handler
     events:
       - schedule: 
-          rate: cron(0 8 ? * SAT *)
+          rate: cron(0 15 ? * SAT *)  # 8 AM PDT (15:00 UTC)
           enabled: true
+          description: "Weekly meal plan generation"
+          name: ${self:service}-${sls:stage}-weekly-plan
     timeout: 300
     memorySize: 256
+    environment:
+      LOG_LEVEL: DEBUG  # Enable detailed logging for troubleshooting
     layers:
-      - arn:aws:lambda:us-west-2:086948990359:layer:lorax-dependencies:4
+      - { Ref: PythonRequirementsLambdaLayer }
 
 resources:
   Resources:
+    TelegramLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/lambda/lorax-tracker-dev-telegram
+        RetentionInDays: 7
+    
+    TelegramRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+          - 'arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess'  # For X-Ray tracing
+        Policies:
+          - PolicyName: DynamoDBAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:PutItem
+                    - dynamodb:UpdateItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - dynamodb:BatchGetItem
+                    - dynamodb:BatchWriteItem
+                    - dynamodb:DescribeTable
+                  Resource:
+                    - !GetAtt TrackerTable.Arn
+                    - !Join
+                      - ''
+                      - - !GetAtt TrackerTable.Arn
+                        - '/index/*'
+          - PolicyName: SSMAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ssm:GetParameter
+                  Resource: 
+                    - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/lorax/*"
+          - PolicyName: EventsAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - events:*
+                    - states:*
+                  Resource: "*"
+          - PolicyName: CloudWatchLogsAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: 
+                    - !GetAtt TelegramLogGroup.Arn
+
     TrackerTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -105,3 +179,5 @@ resources:
             Value: ${self:service}
           - Key: Environment
             Value: ${sls:stage}
+          - Key: ManagedBy
+            Value: serverless-framework

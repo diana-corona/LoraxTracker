@@ -6,15 +6,18 @@ import requests
 from typing import Dict, Any, List
 from datetime import datetime
 
+import os
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from aws_lambda_powertools.logging import correlation_paths
 
 from src.utils.telegram import (
     TelegramClient,
     parse_command,
     format_error_message
 )
-from src.utils.dynamo import DynamoDBClient
+from src.utils.auth import DynamoDBAccessError
+from src.utils.dynamo import get_dynamo
 from src.utils.auth import Authorization
 from src.models.event import CycleEvent
 from .admin import is_admin, handle_allow_command, handle_revoke_command
@@ -30,16 +33,13 @@ from .commands import (
 )
 from .callbacks import handle_callback_query
 
-logger = Logger()
-tracer = Tracer()
+from src.utils.logging import logger
 
-import os
+tracer = Tracer(service="telegram_bot")
 
-dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
 telegram = TelegramClient()
-auth = Authorization()
+auth = Authorization(dynamo_client=get_dynamo())
 
-@logger.inject_lambda_context
 @tracer.capture_lambda_handler
 def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """
@@ -52,10 +52,21 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     Returns:
         API Gateway Lambda proxy response
     """
+    # Add lambda context keys
+    logger.set_correlation_id(context.aws_request_id)
+    logger.structure_logs(append=True, lambda_context={
+        "function_version": context.function_version,
+        "invoked_function_arn": context.invoked_function_arn,
+        "aws_request_id": context.aws_request_id
+    })
+    
+    # Log invocation
+    logger.info("Lambda function invoked")
+    
     try:
         # Log raw incoming event for debugging
         logger.debug("Received webhook event", extra={
-            "raw_event": event,
+            "webhook_event": event,
             "event_type": type(event).__name__,
             "has_body": "body" in event,
             "body_type": type(event.get("body")).__name__ if "body" in event else None
@@ -65,7 +76,7 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         
         # Log parsed body
         logger.debug("Parsed webhook body", extra={
-            "raw_body": body,
+            "webhook_body": body,
             "body_keys": list(body.keys()) if isinstance(body, dict) else None,
             "message_type": "callback_query" if "callback_query" in body else "message" if "message" in body else "unknown"
         })
@@ -93,7 +104,7 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                 "message_type": "command" if text.startswith('/') else "text",
                 "command": command,
                 "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None,
-                "raw_message": body["message"],  # Log raw message for debugging
+                "telegram_message": body["message"],  # Log raw message for debugging
                 "message_id": body["message"].get("message_id"),
                 "date": body["message"].get("date")
             })
@@ -108,22 +119,37 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
             logger.info(f"Admin command access: {command} by user {user_id}")
             return handle_message(body["message"])
         
-        # For non-admin commands, apply authorization check
-        if not auth.check_user_authorized(user_id):
-            # Enhanced logging for unauthorized attempts
-            logger.warning("Unauthorized access attempt", extra={
+        # For non-admin commands, apply authorization check silently
+        try:
+            if not auth.check_user_authorized(user_id):
+                # Enhanced logging for unauthorized attempts, but no user response
+                logger.warning("Unauthorized access attempt", extra={
+                    "user_id": user_id,
+                    "username": user.get("username", None),
+                    "chat_id": str(chat["id"]),
+                    "chat_type": chat.get("type", "private"),
+                    "command": command,
+                    "interaction_type": "callback_query" if "callback_query" in body else "message",
+                    "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+                })
+                # Return silent success to not reveal bot existence
+                return {
+                    "statusCode": 200,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"ok": True})
+                }
+        except DynamoDBAccessError as e:
+            # Log the error but maintain silence to unauthorized users
+            logger.error("DynamoDB access error during authorization", extra={
                 "user_id": user_id,
-                "username": user.get("username", None),
-                "chat_id": str(chat["id"]),
-                "chat_type": chat.get("type", "private"),
-                "command": command,
-                "interaction_type": "callback_query" if "callback_query" in body else "message",
-                "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None
+                "error": str(e),
+                "command": command
             })
+            # Return silent success despite the error
             return {
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"ok": True, "result": True})
+                "body": json.dumps({"ok": True})
             }
         
         # Handle callback queries (button presses)
@@ -140,7 +166,7 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                 "chat_type": chat.get("type", "private"),
                 "callback_data": callback["data"],
                 "group_title": chat.get("title") if chat.get("type") in ["group", "supergroup"] else None,
-                "raw_callback_query": callback,  # Log raw callback for debugging
+                "telegram_callback": callback,  # Log callback for debugging
                 "message_id": callback["message"].get("message_id"),
                 "callback_query_id": callback.get("id")
             })
@@ -183,17 +209,17 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
     text = message.get("text", "")
     
     if not text:
-            return {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
-                "body": json.dumps({
-                    "ok": False,
-                    "error_code": 400,
-                    "description": "No text in message"
-                })
-            }
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body": json.dumps({
+                "ok": False,
+                "error_code": 400,
+                "description": "No text in message"
+            })
+        }
     
     command, args = parse_command(text)
     

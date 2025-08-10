@@ -4,11 +4,16 @@ Authorization utilities for access control.
 import os
 from typing import Optional, Dict, Any
 from datetime import datetime
+import botocore
 
 from aws_lambda_powertools import Logger
-from src.utils.dynamo import DynamoDBClient
+from src.utils.dynamo import DynamoDBClient, get_dynamo
 
 logger = Logger()
+
+class DynamoDBAccessError(Exception):
+    """Raised when there is an error accessing DynamoDB."""
+    pass
 
 class AuthorizationError(Exception):
     """Raised when there is an error during authorization."""
@@ -53,6 +58,9 @@ class Authorization:
             
         Returns:
             bool: True if user is authorized, False otherwise
+            
+        Raises:
+            DynamoDBAccessError: If there is an error accessing DynamoDB
         """
         # Handle mock result first to prevent any DynamoDB interactions in test mode
         if self._mock_result is not None:
@@ -63,31 +71,35 @@ class Authorization:
             return self._mock_result
 
         try:
-            # Only try to use DynamoDB if we have a client
+            # Ensure DynamoDB client is initialized
             if not self.dynamo:
                 logger.error("DynamoDB client not initialized", extra={
-                    "user_id": user_id
+                    "user_id": user_id,
+                    "error": "Client not initialized",
+                    "table": os.environ.get('TRACKER_TABLE_NAME')
                 })
-                return False
+                raise DynamoDBAccessError("DynamoDB client not initialized")
 
-            # Log the lookup attempt
-            logger.debug("Checking user authorization", extra={
-                "user_id": user_id,
-                "lookup_key": {
-                    "PK": f"ALLOWED_USER#{user_id}",
-                    "SK": "METADATA"
-                }
-            })
-
-            allowed_user = self.dynamo.get_item({
+            lookup_key = {
                 "PK": f"ALLOWED_USER#{user_id}",
                 "SK": "METADATA"
+            }
+
+            # Log the lookup attempt with more context
+            logger.debug("Checking user authorization", extra={
+                "user_id": user_id,
+                "lookup_key": lookup_key,
+                "table": self.dynamo.table.name,
+                "operation": "get_item"
             })
+
+            allowed_user = self.dynamo.get_item(lookup_key)
 
             # Handle case where allowed_user is None
             if not allowed_user:
                 logger.debug("User not found in allow list", extra={
-                    "user_id": user_id
+                    "user_id": user_id,
+                    "table": self.dynamo.table.name
                 })
                 return False
 
@@ -95,24 +107,47 @@ class Authorization:
             status = allowed_user.get("status")
             is_authorized = status == "active"
 
+            # Enhanced logging with more context
             logger.debug("Authorization check result", extra={
                 "user_id": user_id,
                 "user_found": True,
                 "user_status": status,
                 "is_authorized": is_authorized,
-                "user_data": allowed_user  # Log full user data for debugging
+                "lookup_key": lookup_key,
+                "table": self.dynamo.table.name,
+                "user_data": {k: v for k, v in allowed_user.items() if k not in ["PK", "SK"]}
             })
 
             return is_authorized
 
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code')
+            error_msg = e.response.get('Error', {}).get('Message')
+            
+            logger.error("DynamoDB access error", extra={
+                "user_id": user_id,
+                "error_code": error_code,
+                "error_message": error_msg,
+                "operation": "get_item",
+                "table": os.environ.get('TRACKER_TABLE_NAME'),
+                "lookup_key": lookup_key if 'lookup_key' in locals() else None
+            })
+            
+            if error_code == "AccessDeniedException":
+                raise DynamoDBAccessError(f"Access denied to DynamoDB: {error_msg}")
+            elif error_code == "ResourceNotFoundException":
+                raise DynamoDBAccessError(f"DynamoDB table not found: {error_msg}")
+            else:
+                raise DynamoDBAccessError(f"DynamoDB error ({error_code}): {error_msg}")
+
         except Exception as e:
-            # Log specific exception details
-            logger.error("Error checking user authorization", extra={
+            logger.error("Unexpected error checking user authorization", extra={
                 "user_id": user_id,
                 "error_type": e.__class__.__name__,
-                "error_message": str(e)
+                "error_message": str(e),
+                "table": os.environ.get('TRACKER_TABLE_NAME')
             })
-            return False
+            raise DynamoDBAccessError(f"Unexpected error accessing DynamoDB: {str(e)}")
     
     def add_allowed_user(
         self,

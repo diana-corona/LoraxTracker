@@ -132,7 +132,51 @@ Benefits:
 - Makes code self-documenting
 - Helps maintain consistent documentation style
 
-### 6. Logging Guidelines
+### 6. Database Access Guidelines
+
+This project uses a single DynamoDB table design. To maintain consistency and prevent errors:
+
+- **Always use get_dynamo()**: The ONLY way to access DynamoDB is through the get_dynamo() function:
+  ```python
+  from src.utils.dynamo import get_dynamo
+
+  # Correct way to access DynamoDB
+  dynamo = get_dynamo()
+  item = dynamo.get_item({"PK": "123", "SK": "metadata"})
+
+  # INCORRECT - Never do this
+  # dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+  ```
+
+- **Table Name**: The table name is managed through environment variables:
+  - Development: lorax-tracker-dev-TrackerTable
+  - Production: lorax-tracker-prod-TrackerTable
+  - Always access via TRACKER_TABLE_NAME environment variable
+
+- **Single Table Design**: All data is stored in one table using composite keys:
+  ```python
+  # User data
+  PK = "USER#123"
+  SK = "METADATA"
+
+  # Authorization
+  PK = "ALLOWED_USER#123"
+  SK = "METADATA"
+
+  # Events
+  PK = "USER#123"
+  SK = "EVENT#2025-08-10"
+  ```
+
+- **Use Helper Functions**: Use the provided key creation helpers:
+  ```python
+  from src.utils.dynamo import create_pk, create_event_sk
+
+  user_pk = create_pk(user_id)
+  event_sk = create_event_sk(date_str)
+  ```
+
+### 7. Logging Guidelines
 
 - Use the aws_lambda_powertools Logger
 - Log at appropriate levels:
@@ -183,7 +227,59 @@ Benefits:
       )
   ```
 
-### 7. Security Guidelines
+### 7. AWS Resource Guidelines
+
+- **Resource Naming**: Never hardcode resource names (e.g., table names, function names) in the code. Instead, use CloudFormation references:
+  ```yaml
+  # CORRECT - Use CloudFormation references
+  environment:
+    TRACKER_TABLE_NAME: !Ref TrackerTable
+  
+  # INCORRECT - Don't hardcode names
+  environment:
+    TRACKER_TABLE_NAME: lorax-tracker-dev-TrackerTable-2Y0WUPIZ3TI3
+  ```
+
+- **Resource ARNs**: Always use CloudFormation intrinsic functions to reference resource ARNs:
+  ```yaml
+  # CORRECT - Use !GetAtt or !Sub for ARNs
+  Resource:
+    - !GetAtt TrackerTable.Arn
+    - !Join
+      - ''
+      - - !GetAtt TrackerTable.Arn
+        - '/index/*'
+  
+  # INCORRECT - Don't construct ARNs manually
+  Resource:
+    - arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/lorax-tracker-dev-TrackerTable
+  ```
+
+- **Environment Variables**: Use serverless.yml variables for stage-dependent values:
+  ```yaml
+  # CORRECT - Use serverless framework variables
+  custom:
+    tableName: ${self:service}-${sls:stage}-TrackerTable
+
+  # INCORRECT - Hardcode stage names
+  custom:
+    tableName: lorax-tracker-dev-TrackerTable
+  ```
+
+- **IAM Roles**: Use CloudFormation references in IAM policies:
+  ```yaml
+  # CORRECT - Reference resources in IAM policies
+  - Effect: Allow
+    Action: dynamodb:GetItem
+    Resource: !GetAtt TrackerTable.Arn
+
+  # INCORRECT - Hardcode resource ARNs
+  - Effect: Allow
+    Action: dynamodb:GetItem
+    Resource: arn:aws:dynamodb:us-west-2:123456789012:table/lorax-tracker-dev-TrackerTable
+  ```
+
+### 8. Security Guidelines
 
 - **Centralized Authorization**: All authorization is handled by the main webhook handler (`src/handlers/telegram/handler.py`):
   ```python
@@ -347,6 +443,8 @@ Before submitting code:
 - [ ] No unused imports or variables
 - [ ] Error handling is in place
 - [ ] Logging is added where appropriate
+- [ ] Database access uses get_dynamo() function
+- [ ] Table key patterns follow conventions
 
 ## Complete Example
 

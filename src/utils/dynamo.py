@@ -9,11 +9,37 @@ from boto3.dynamodb.conditions import Key, Attr
 # Singleton instance
 _dynamo_instance = None
 
-def get_dynamo():
-    """Get or create singleton DynamoDB client instance."""
+def get_dynamo() -> 'DynamoDBClient':
+    """
+    Get or create singleton DynamoDB client instance.
+    
+    This is the ONLY way to access DynamoDB in this project. Never instantiate
+    DynamoDBClient directly. This ensures consistent table access across the codebase
+    and proper error handling for missing configuration.
+    
+    Example:
+        # Correct usage
+        dynamo = get_dynamo()
+        item = dynamo.get_item({"PK": "123", "SK": "metadata"})
+        
+        # Incorrect usage - Don't do this
+        # dynamo = DynamoDBClient(os.environ['TRACKER_TABLE_NAME'])
+    
+    Returns:
+        DynamoDBClient: Singleton instance of DynamoDB client
+        
+    Raises:
+        EnvironmentError: If TRACKER_TABLE_NAME environment variable is not set
+    """
     global _dynamo_instance
     if _dynamo_instance is None:
-        table_name = os.environ.get('DYNAMODB_TABLE', 'lorax-tracker-dev')
+        try:
+            table_name = os.environ['TRACKER_TABLE_NAME']
+        except KeyError:
+            raise EnvironmentError(
+                "TRACKER_TABLE_NAME environment variable not set. "
+                "This variable must be set to the DynamoDB table name."
+            )
         _dynamo_instance = DynamoDBClient(table_name)
     return _dynamo_instance
 

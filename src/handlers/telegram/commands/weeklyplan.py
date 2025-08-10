@@ -25,11 +25,12 @@ Components:
     - RecipeSelectionStorage: Manages recipe selection state
 """
 
+import os
 from datetime import datetime
 import json
 from typing import Optional, Dict, Any, List
 
-from aws_lambda_powertools import Logger
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from src.handlers.telegram.exceptions import (
     NoEventsError,
     WeeklyPlanError,
@@ -46,8 +47,21 @@ from src.models.event import CycleEvent
 from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
 from src.services.cycle import analyze_cycle_phase
 from src.utils.clients import get_telegram, get_dynamo, get_clients
+from src.utils.auth import Authorization
+from src.utils.logging import logger
 
-logger = Logger()
+def get_all_clients():
+    """Get all required clients."""
+    dynamo = get_dynamo()
+    telegram = get_telegram()
+    auth = Authorization(dynamo_client=dynamo)
+    return dynamo, telegram, auth
+
+def get_table_name() -> str:
+    """Get DynamoDB table name with stage suffix."""
+    service = os.environ.get('POWERTOOLS_SERVICE_NAME', 'lorax-tracker')
+    stage = os.environ.get('STAGE', 'dev')
+    return f"{service}-{stage}-TrackerTable"
 
 # Map of meal types to emojis
 MEAL_EMOJIS = {
@@ -90,38 +104,92 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
     logger.info("Processing weeklyplan command", extra={
         "user_id": user_id,
         "chat_id": chat_id,
-        "message": message,  # Log the full message for debugging
-        "timestamp": datetime.now().isoformat()
+        "command_timestamp": datetime.now().isoformat()
     })
 
-    # Get clients lazily
-    dynamo, telegram = get_clients()
+    # Get all clients with auth
+    dynamo, telegram, auth = get_all_clients()
+    
+    # Verify user authorization
+    try:
+        if not auth.check_user_authorized(user_id):
+            logger.warning(f"Unauthorized weeklyplan access attempt", extra={"user_id": user_id})
+            telegram.send_message(
+                chat_id=chat_id,
+                text="⚠️ You are not authorized to use this command."
+            )
+            return {
+                "statusCode": 403,
+                "body": json.dumps({
+                    "ok": False,
+                    "error_code": "UNAUTHORIZED",
+                    "description": "User not authorized"
+                })
+            }
+    except Exception as e:
+        logger.error(
+            "Error checking user authorization",
+            extra={
+                "user_id": user_id,
+                "error": str(e),
+                "error_type": e.__class__.__name__
+            }
+        )
 
     try:
         # Get user's events
+        table_name = get_table_name()
+        logger.debug(f"Using table: {table_name}")
         events = dynamo.query_items(
             partition_key="PK",
             partition_value=create_pk(user_id)
         )
+        logger.info(f"Found {len(events)} total events for user {user_id}")
         
-        # Convert to CycleEvent objects
-        cycle_events = [
-            CycleEvent(**event)
-            for event in events
-            if event["SK"].startswith("EVENT#")
-        ]
+        # Convert to CycleEvent objects with error tracking
+        cycle_events = []
+        for event in events:
+            try:
+                if event["SK"].startswith("EVENT#"):
+                    cycle_events.append(CycleEvent(**event))
+            except Exception as e:
+                logger.warning(
+                    "Failed to parse cycle event",
+                    extra={
+                        "user_id": user_id,
+                        "event": event,
+                        "error": str(e),
+                        "error_type": e.__class__.__name__
+                    }
+                )
+                continue
+        
+        logger.info(f"Successfully parsed {len(cycle_events)} cycle events")
         
         if not cycle_events:
-            logger.warning("No cycle events found for user", extra={
-                "user_id": user_id,
-                "event_count": 0,
-                "action": "weekly_plan_generation"
-            })
-            raise NoEventsError("No cycle events found. Please register some events first.")
-            
+            logger.warning(
+                "No valid cycle events found for user",
+                extra={
+                    "user_id": user_id,
+                    "total_events": len(events),
+                    "action": "weekly_plan_generation"
+                }
+            )
+            raise NoEventsError("No cycle events found. Please register a cycle event first using the /registrar command.")
+        
         # Generate and format weekly plan
         weekly_plan = generate_weekly_plan(cycle_events)
         formatted_plan = format_weekly_plan(weekly_plan)
+        
+        logger.info(
+            "Generated weekly plan",
+            extra={
+                "user_id": user_id,
+                "plan_start": weekly_plan.start_date.isoformat(),
+                "plan_end": weekly_plan.end_date.isoformat(),
+                "phase_groups": len(weekly_plan.phase_groups)
+            }
+        )
         
         # Send plan
         telegram.send_message(
@@ -139,35 +207,52 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
         # Clear any previous recipe selections
         RecipeSelectionStorage.clear_selection(user_id)
         
-        # Get user's current phase
-        current_phase = analyze_cycle_phase(cycle_events)
-        phase_type = current_phase.functional_phase.value
-        
-        # Load and select phase-specific recipes for meal planning with rotation
-        recipe_service = RecipeService()
-        recipe_service.load_recipes_for_meal_planning(phase=phase_type, user_id=user_id)
-        
-        # Get breakfast recipes and save to history
-        breakfast_recipes = recipe_service.get_recipes_by_meal_type('breakfast', phase=phase_type, limit=2)
-        for recipe in breakfast_recipes:
-            recipe_service.save_recipe_history(
-                user_id=user_id,
-                recipe_id=recipe['id'],
-                meal_type='breakfast',
-                phase=phase_type
-            )
-        
-        keyboard = create_recipe_selection_keyboard(breakfast_recipes, 'breakfast')
+        try:
+            # Get user's current phase
+            current_phase = analyze_cycle_phase(cycle_events)
+            phase_type = current_phase.functional_phase.value
+            
+            # Load and select phase-specific recipes for meal planning with rotation
+            recipe_service = RecipeService()
+            recipe_service.load_recipes_for_meal_planning(phase=phase_type, user_id=user_id)
+            
+            # Get breakfast recipes and save to history
+            breakfast_recipes = recipe_service.get_recipes_by_meal_type('breakfast', phase=phase_type, limit=2)
+            for recipe in breakfast_recipes:
+                recipe_service.save_recipe_history(
+                    user_id=user_id,
+                    recipe_id=recipe['id'],
+                    meal_type='breakfast',
+                    phase=phase_type
+                )
+            
+            keyboard = create_recipe_selection_keyboard(breakfast_recipes, 'breakfast')
 
-        # Send recipe selection message
-        telegram.send_message(
-            chat_id=chat_id,
-            text=(
-                "Let's select recipes for your meal plan! 📝\n\n"
-                f"{MEAL_EMOJIS['breakfast']} First, choose your breakfast:"
-            ),
-            reply_markup=keyboard
-        )
+            # Send recipe selection message
+            telegram.send_message(
+                chat_id=chat_id,
+                text=(
+                    "Let's select recipes for your meal plan! 📝\n\n"
+                    f"{MEAL_EMOJIS['breakfast']} First, choose your breakfast:"
+                ),
+                reply_markup=keyboard
+            )
+
+            logger.info("Recipe selection setup completed", extra={
+                "user_id": user_id,
+                "phase": phase_type,
+                "recipes_count": len(breakfast_recipes)
+            })
+
+        except Exception as e:
+            logger.exception(
+                "Failed to setup recipe selection",
+                extra={
+                    "user_id": user_id,
+                    "error_type": e.__class__.__name__
+                }
+            )
+            raise WeeklyPlanError("Error setting up recipe selection") from e
         
         return {
             "statusCode": 200,
@@ -284,7 +369,7 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         "event_type": type(event).__name__,
         "has_body": "body" in event,
         "body_type": type(event.get("body")).__name__ if "body" in event else None,
-        "raw_event": event  # Log the full event for debugging
+        "callback_event": event  # Log the full event for debugging
     })
     
     # Parse body if it's a string
@@ -335,6 +420,8 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             raise RecipeSelectionError(f"Failed to update recipe selection: {str(e)}")
 
         # Get current phase
+        table_name = get_table_name()
+        logger.debug(f"Using table for recipe selection: {table_name}")
         events = get_dynamo().query_items(
             partition_key="PK",
             partition_value=create_pk(user_id)
@@ -417,7 +504,7 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             "recipe_id": recipe_id,
             "error": str(e),
             "error_type": "RECIPE_SELECTION_ERROR",
-            "raw_event": event  # Log raw event for debugging
+            "callback_event": event  # Log raw event for debugging
         })
         telegram.send_message(
             chat_id=chat_id,
@@ -440,7 +527,7 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             "phase_type": phase_type if 'phase_type' in locals() else None,
             "error": str(e),
             "error_type": "RECIPE_NOT_FOUND",
-            "raw_event": event  # Log raw event for debugging
+            "callback_event": event  # Log raw event for debugging
         })
         telegram.send_message(
             chat_id=chat_id,
@@ -464,7 +551,7 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             "meal_type": meal_type,
             "recipe_id": recipe_id,
             "error_type": e.__class__.__name__,
-            "raw_event": event  # Log raw event for debugging
+            "callback_event": event  # Log raw event for debugging
             }
         )
         telegram.send_message(

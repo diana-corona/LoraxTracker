@@ -10,3 +10,4 @@ pytest-asyncio
 black
 isort
 pylint
+aws-xray-sdk==2.14.0
