@@ -1,5 +1,36 @@
 # Contributing Guidelines
 
+## ⚠️ Production Data Protection
+
+**CRITICAL: This project contains REAL USER DATA. Follow these guidelines to prevent data loss:**
+
+### Database Protection
+- **NEVER** delete the DynamoDB table (`lorax-tracker-dev-TrackerTable`)
+- **NEVER** run `sls remove` as it will destroy the database
+- **AVOID** modifications to the table structure in serverless.yml
+
+### Safe Deployment Practices
+- Only use `sls deploy` to update code/functions
+- Do NOT use commands that could affect the database:
+  - ❌ `sls remove`
+  - ❌ `aws dynamodb delete-table`
+  - ❌ Manual table deletion in AWS Console
+
+### Before Major Changes
+1. Create a backup of the DynamoDB table
+2. Test changes in a separate development environment
+3. Get approval from maintainers for any infrastructure changes
+4. Document all steps in case rollback is needed
+
+### Emergency Recovery
+If you accidentally delete or modify data:
+1. **STOP** all deployments immediately
+2. Contact repository maintainers
+3. Do NOT attempt fixes without maintainer guidance
+4. Document exactly what commands were run
+
+Remember: User data is irreplaceable. When in doubt, ask the maintainers first.
+
 ## Code Organization
 
 When adding new functionality to the codebase, follow these guidelines to maintain clean and maintainable code:
