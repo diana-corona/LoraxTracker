@@ -46,26 +46,43 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
         Enhanced PhaseRecommendations with recipe suggestions
     """
     try:
-        # Initialize recipe service
+        # Initialize recipe service and load recipes for this phase
         recipe_service = RecipeService()
+        recipe_service.load_recipes_for_meal_planning(phase_type.value.lower())
         
-        # Get recipe recommendations for this phase
-        recipe_recs = recipe_service.get_recipe_recommendations(phase_type)
+        # Get recipe recommendations for each meal type
+        meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
+        recipe_recs = []
+        
+        for meal_type in meal_types:
+            recipes = recipe_service.get_recipes_by_meal_type(
+                meal_type=meal_type,
+                phase=phase_type.value.lower(),
+                limit=2  # Get up to 2 recipes per meal type
+            )
+            if recipes:
+                recipe_recs.append({
+                    'meal_type': meal_type,
+                    'recipes': [recipe for recipe in recipes]
+                })
         
         # Format recipe suggestions and generate shopping list
-        recipe_suggestions = format_recipe_suggestions(recipe_recs.meals)
-        meal_plan_preview = create_meal_plan_preview(recipe_recs.meals)
+        recipe_suggestions = format_recipe_suggestions(recipe_recs)
+        meal_plan_preview = create_meal_plan_preview(recipe_recs)
         
-        # Generate shopping list using RecipeSelectionService
-        meal_selections = [
-            MealSelection(
-                meal_type=meal.meal_type,
-                recipe=meal.recipes[0]  # Use first recipe as default selection
-            )
-            for meal in recipe_recs.meals
-        ]
-        shopping_list = RecipeSelectionService.generate_shopping_list(meal_selections)
-        formatted_shopping_list = RecipeSelectionService.format_shopping_list(shopping_list)
+        # Generate shopping list using RecipeService directly since we have recipe IDs
+        recipe_service = RecipeService()
+        recipe_ids = [meal['recipes'][0]['id'] for meal in recipe_recs]  # Use first recipe from each meal type
+        ingredients = recipe_service.get_multiple_recipe_ingredients(recipe_ids)
+        
+        # Format ingredients into shopping preview
+        shopping_preview = []
+        if ingredients.proteins:
+            shopping_preview.extend(["🥩 Proteins:"] + [f"  • {item}" for item in ingredients.proteins][:3])
+        if ingredients.produce:
+            shopping_preview.extend(["🥬 Produce:"] + [f"  • {item}" for item in ingredients.produce][:3])
+        if ingredients.dairy:
+            shopping_preview.extend(["🥛 Dairy:"] + [f"  • {item}" for item in ingredients.dairy][:3])
         
         return PhaseRecommendations(
             fasting_protocol=phase_details["fasting_protocol"],
@@ -75,7 +92,7 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
             # Enhanced recipe fields
             recipe_suggestions=recipe_suggestions,
             meal_plan_preview=meal_plan_preview,
-            shopping_preview=formatted_shopping_list.splitlines()[:5]  # Top 5 lines of shopping list
+            shopping_preview=shopping_preview[:10]  # Show up to 10 lines of shopping list
         )
         
     except Exception as e:
@@ -88,65 +105,58 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
             supplements=phase_details.get("supplement_recommendations")
         )
 
-def format_recipe_suggestions(meals: List[MealRecommendation]) -> List[Dict[str, Any]]:
+def format_recipe_suggestions(meals: List[Dict]) -> List[Dict[str, Any]]:
     """
-    Convert MealRecommendation objects to dict format for display.
+    Convert dictionary of meal recommendations to display format.
     
     Args:
-        meals: List of meal recommendations
+        meals: List of meal recommendation dictionaries
         
     Returns:
         List of formatted recipe suggestions using markdown links
     """
-    # Use RecipeSelectionService to format recipe options with embedded URLs
-    formatted_text = RecipeSelectionService.format_recipe_options(meals)
-    
-    # Convert to dict format for consistency with existing code
     suggestions = []
     for meal in meals:
         meal_data = {
-            "meal_type": meal.meal_type,
+            "meal_type": meal['meal_type'],
             "recipes": [{
-                "title": recipe.title,
-                "prep_time": recipe.prep_time,
-                "tags": recipe.tags,
-                "url": recipe.url,
-                "formatted_text": f"[{recipe.title}]({recipe.url})" if recipe.url else recipe.title
-            } for recipe in meal.recipes],
-            "total_prep_time": meal.prep_time_total
+                "title": recipe['title'],
+                "prep_time": recipe.get('prep_time', 0),
+                "id": recipe['id'],
+                "formatted_text": f"[{recipe['title']}](/recipes/{meal['meal_type']}/{recipe['id']})"
+            } for recipe in meal['recipes']],
+            "total_prep_time": sum(r.get('prep_time', 0) for r in meal['recipes'])
         }
         suggestions.append(meal_data)
     
     return suggestions
 
-def create_meal_plan_preview(meals: List[MealRecommendation]) -> List[str]:
+def create_meal_plan_preview(meals: List[Dict]) -> List[str]:
     """
-    Generate human-readable meal plan preview strings with embedded URLs.
+    Generate human-readable meal plan preview strings.
     
     Args:
-        meals: List of meal recommendations
+        meals: List of meal recommendation dictionaries
         
     Returns:
         List of formatted meal plan strings with clickable recipe links
     """
     preview = []
     for meal in meals:
-        emoji = MEAL_ICONS.get(meal.meal_type.lower(), "🍴")
+        emoji = MEAL_ICONS.get(meal['meal_type'].lower(), "🍴")
         
-        if len(meal.recipes) == 1:
-            recipe = meal.recipes[0]
-            url_part = f"]({recipe.url})" if recipe.url else "]"
+        if len(meal['recipes']) == 1:
+            recipe = meal['recipes'][0]
             preview.append(
-                f"{emoji} {meal.meal_type.title()}: [{recipe.title}{url_part} "
-                f"({recipe.prep_time} min)"
+                f"{emoji} {meal['meal_type'].title()}: [{recipe['title']}](/recipes/{meal['meal_type']}/{recipe['id']}) "
+                f"({recipe.get('prep_time', 0)} min)"
             )
         else:
             # Multiple recipes for this meal type
             recipe_texts = []
-            for r in meal.recipes:
-                url_part = f"]({r.url})" if r.url else "]"
-                recipe_texts.append(f"[{r.title}{url_part} ({r.prep_time} min)")
-            preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_texts)}")
+            for r in meal['recipes']:
+                recipe_texts.append(f"[{r['title']}](/recipes/{meal['meal_type']}/{r['id']}) ({r.get('prep_time', 0)} min)")
+            preview.append(f"{emoji} {meal['meal_type'].title()}: {' or '.join(recipe_texts)}")
     
     return preview
 
@@ -368,32 +378,15 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
                 *[f"  {meal}" for meal in data['recommendations'].meal_plan_preview]
             ])
         
-        # Add individual phase groups with their traditional phase and specific activities
-        formatted.append("")  # Add space before individual phases
-        for group in data['groups']:
-            date_range = (
-                f"{group.start_date.strftime('%a %d')}-{group.end_date.strftime('%a %d')}"
-                if group.start_date != group.end_date
-                else f"{group.start_date.strftime('%A %d')}"
-            )
-            
-            # Show both traditional and functional dates if they differ
-            date_info = [f"{date_range}:"]
-            if group.functional_phase_start != group.start_date or group.functional_phase_end != group.end_date:
-                date_info.append(
-                    f"Traditional phase: {group.traditional_phase.value.title()} | "
-                    f"Functional phase: {group.functional_phase_start.strftime('%b %d')} - "
-                    f"{group.functional_phase_end.strftime('%b %d')}"
-                )
-            else:
-                date_info.append(f"({group.traditional_phase.value.title()})")
-            
-            formatted.extend(date_info)
-            formatted.append(f"💪 Activities: {', '.join(TRADITIONAL_PHASE_RECOMMENDATIONS[group.traditional_phase])}")
-            
-            # Add transition warning if applicable
-            if group.has_phase_transition and group.transition_message:
-                formatted.extend(["", f"⚠️ {group.transition_message}"])
+        # Add next phase preview if this is the last day of the current phase
+        last_group = data['groups'][-1]  # Get last group in this functional phase
+        if last_group.next_functional_phase and last_group.functional_phase_end <= plan.end_date:
+            next_phase_start = (last_group.functional_phase_end + timedelta(days=1)).strftime('%A, %b %d')
+            formatted.extend([
+                "",
+                f"Next Phase: {last_group.next_functional_phase.value.title()} {get_phase_emoji(last_group.next_functional_phase)} (starting {next_phase_start})",
+                f"⏱️ Fasting: {last_group.next_phase_recommendations.fasting_protocol}"
+            ])
         
         # Add supplements if available (shared at functional phase level)
         if data['recommendations'].supplements:
