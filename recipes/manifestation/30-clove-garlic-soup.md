@@ -11,7 +11,6 @@
 - dinner
 
 ## Ingredients
-For the soup:
 - 4 heads garlic, tops sliced off
 - 1 medium yellow onion, diced
 - 4 large Yukon gold potatoes, peeled and chopped
@@ -22,11 +21,9 @@ For the soup:
 - 1 cup cashews or sunflower seeds
 - salt and cracked black pepper, to taste
 - olive oil, for roasting garlic
-
-For serving (optional):
-- Fresh chives, chopped
-- Croutons
-- Vegan parmesan, grated or crumbled
+- Fresh chives, chopped (for serving, optional)
+- Croutons (optional)
+- Vegan parmesan, grated or crumbled (optional)
 
 ## Instructions
 1. Preheat the oven to 400°F and line a baking sheet with parchment

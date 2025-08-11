@@ -12,22 +12,18 @@ Nurture Phase (🌱)
 - vegetarian
 
 ## Ingredients
-For the Hazelnut Praline:
 - 1⅓ cup (175g) hazelnuts
 - 2 cups (430g) granulated sugar
 - ½ cup (120ml) filtered water
-- 1 tablespoon (14g) unsalted butter
-
-For the Fudge Base:
+- 1 tablespoon (14g) unsalted butter (for praline)
 - 18 oz (500g) chocolate, roughly chopped
-- 2 tablespoons (28g) unsalted butter
+- 2 tablespoons (28g) unsalted butter (for fudge)
 - ½ teaspoon (4g) fine sea salt
 - 14 oz (400g) sweetened condensed milk
 - 1½ teaspoons (4g) vanilla extract
 
 ## Instructions
-For the Hazelnut Praline:
-1. Preheat oven to 350°F
+1. Make praline - Preheat oven to 350°F
 2. Spread hazelnuts on a parchment-lined baking sheet
 3. Toast for 10-15 minutes
 4. Transfer hot hazelnuts to a clean dish towel
@@ -42,21 +38,14 @@ For the Hazelnut Praline:
 13. Pour onto silicone mat and spread evenly
 14. Let cool completely
 15. Break into pieces and crush in a bag
-
-For the Fudge:
-1. Prepare an 8x8 baking dish with oil and parchment paper
-2. In a medium saucepot, combine:
-   - Chocolate
-   - Butter
-   - Salt
-   - Sweetened condensed milk
-   - Vanilla extract
-3. Heat over medium heat, stirring often until melted
-4. Stir in crushed hazelnut praline
-5. Pour into prepared pan
-6. Top with additional crushed praline
-7. Refrigerate for 3 hours or overnight
-8. Cut into squares when set
+16. Make fudge - Prepare an 8x8 baking dish with oil and parchment paper
+17. In a medium saucepot, combine chocolate, butter, salt, sweetened condensed milk, and vanilla extract
+18. Heat over medium heat, stirring often until melted
+19. Stir in crushed hazelnut praline
+20. Pour into prepared pan
+21. Top with additional crushed praline
+22. Refrigerate for 3 hours or overnight
+23. Cut into squares when set
 
 ## Notes
 - Make sure sugar syrup doesn't crystallize when making praline

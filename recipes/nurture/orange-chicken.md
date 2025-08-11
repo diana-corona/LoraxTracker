@@ -10,14 +10,11 @@ Nurture Phase (🌱)
 - dinner
 
 ## Ingredients
-For the chicken:
 - 4 boneless skinless chicken breasts, cut into bite-size pieces
 - 2 eggs
-- ½ cup cornstarch
+- ½ cup cornstarch (for coating)
 - ½ cup flour
 - Oil for frying
-
-For the orange sauce:
 - 1 cup fresh orange juice
 - ½ cup sugar
 - ¼ cup rice vinegar (or white vinegar)
@@ -27,36 +24,29 @@ For the orange sauce:
 - ½ teaspoon red chili flakes
 - 1 tsp sesame oil
 - Orange zest from 2 oranges
-- 1 tablespoon cornstarch
+- 1 tablespoon cornstarch (for sauce)
 - 2 tablespoons water or orange juice (for cornstarch slurry)
-
-For serving:
-- Green onions, chopped
-- Cooked rice
+- Green onions, chopped, for serving
+- Cooked rice, for serving
 
 ## Instructions
-For the sauce:
-1. In a bowl, combine all sauce ingredients except cornstarch and water/juice
+1. Make sauce - In a bowl, combine orange juice, sugar, vinegar, soy sauce, ginger, garlic powder, chili flakes, sesame oil, and orange zest
 2. In separate small bowl, mix cornstarch with water/juice to make slurry
 3. Set both aside
-
-For the chicken:
-1. Fill Dutch oven or large skillet with about 1 inch of oil
-2. Heat oil to 350°F over medium-high heat
-3. Whisk eggs in bowl
-4. Add chicken pieces to egg and coat well
-5. In large bowl, whisk flour and cornstarch together
-6. Dredge egg-coated chicken in flour mixture
-7. Set coated pieces aside on plate
-
-To cook:
-1. Fry chicken in batches until golden brown
-2. Meanwhile, warm sauce in pan
-3. Add cornstarch slurry to sauce and simmer until thickened
-4. Add fried chicken to warmed sauce
-5. Toss to coat evenly
-6. Sprinkle with green onions
-7. Serve over rice
+4. Prepare chicken - Fill Dutch oven or large skillet with about 1 inch of oil
+5. Heat oil to 350°F over medium-high heat
+6. Whisk eggs in bowl
+7. Add chicken pieces to egg and coat well
+8. In large bowl, whisk flour and cornstarch together
+9. Dredge egg-coated chicken in flour mixture
+10. Set coated pieces aside on plate
+11. Cook dish - Fry chicken in batches until golden brown
+12. Meanwhile, warm sauce mixture in pan
+13. Add cornstarch slurry to sauce and simmer until thickened
+14. Add fried chicken to warmed sauce
+15. Toss to coat evenly
+16. Sprinkle with green onions
+17. Serve over rice
 
 ## Notes
 - Can make sauce spicier by adding fresh chili or more red chili flakes

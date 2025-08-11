@@ -13,28 +13,21 @@
 - healthy
 
 ## Ingredients
-For the Rice:
 - 3 cups (630g) rice
 - 3 cups (710ml) water
-
-For the Teriyaki Glaze:
-- ¼ cup (67g) soy sauce
-- ¼ cup (55g) white distilled vinegar
+- ¼ cup (67g) soy sauce (for teriyaki glaze)
+- ¼ cup (55g) white distilled vinegar (for teriyaki glaze)
 - ¼ cup (53g) honey
-- 2 teaspoons (8g) cornstarch
-- 2 teaspoons (9g) water
-
-For the Spicy Peanut Sauce:
+- 2 teaspoons (8g) cornstarch (for teriyaki glaze)
+- 2 teaspoons (9g) water (for teriyaki glaze)
 - ¾ cup (229g) smooth peanut butter
-- 2½ tablespoons (36g) white distilled vinegar
+- 2½ tablespoons (36g) white distilled vinegar (for peanut sauce)
 - 3 tablespoons (42g) granulated sugar
-- 2 tablespoons (50g) soy sauce
+- 2 tablespoons (50g) soy sauce (for peanut sauce)
 - 2 tablespoons (33g) sriracha
 - 1 clove garlic, grated
-- ¼ cup (60ml) water
-- 1 teaspoon (4g) cornstarch
-
-For the Bowl:
+- ¼ cup (60ml) water (for peanut sauce)
+- 1 teaspoon (4g) cornstarch (for peanut sauce)
 - 6 boneless, skinless chicken thighs, cut into 1-inch cubes
 - Salt and pepper to taste
 - 4 eggs, soft boiled
@@ -47,62 +40,42 @@ For the Bowl:
 - ¼ cup (37g) crushed peanuts
 
 ## Instructions
-For the Rice:
-1. Wash rice thoroughly 2 times
+1. Prepare rice - Wash rice thoroughly 2 times
 2. Place in rice cooker with water
 3. Cook until done
-
-For the Teriyaki Glaze:
-1. Combine soy sauce, vinegar, and honey in a small pot
-2. Bring to boil over medium-high heat
-3. Reduce for one minute
-4. Whisk cornstarch and water in a separate bowl
-5. Add ¾ of cornstarch slurry to sauce, stir
-6. Boil 30 seconds until thickened
-7. Add remaining slurry if needed for thickness
-
-For the Chicken:
-1. Thread chicken onto 6-8 wooden skewers
-2. Spray with oil
-3. Season generously with salt and pepper
-4. Grill or pan-cook over medium-high heat for 5-10 minutes, turning frequently
-5. Brush with teriyaki glaze
-6. Finish on high heat to caramelize
-
-For the Peanut Sauce:
-1. Heat sugar, soy sauce, and vinegar until sugar dissolves
-2. Let cool slightly
-3. Add sriracha, peanut butter, and garlic
-4. Whisk together
-5. If too thick, add water and cornstarch mixture
-
-For the Soft-Boiled Eggs:
-1. Bring water to boil just under medium-high heat
-2. Add eggs
-3. Boil for 6 minutes and 30 seconds
-4. Transfer to ice bath for 5 minutes
-5. Crack shell all over
-6. Peel under running water
-7. Pat dry and cut in half
-
-For the Vegetables:
-1. Season julienned carrots with:
-   - Salt
-   - Lime juice
-   - Sesame oil
-2. Season avocado slices with flaky salt and lime juice
-
-For Assembly:
-1. Add desired amount of rice to bowl
-2. Add 1-2 chicken skewers
-3. Arrange carrots and cucumber ribbons
-4. Add 1-2 egg halves
-5. Garnish with:
-   - Green onion
-   - Spicy peanut sauce
-   - Crushed peanuts
-   - Avocado slices
-6. Drizzle chicken with additional teriyaki glaze
+4. Make teriyaki glaze - Combine soy sauce, vinegar, and honey in a small pot
+5. Bring to boil over medium-high heat
+6. Reduce for one minute
+7. Whisk cornstarch and water in a separate bowl
+8. Add ¾ of cornstarch slurry to sauce, stir
+9. Boil 30 seconds until thickened
+10. Add remaining slurry if needed for thickness
+11. Prepare chicken - Thread onto 6-8 wooden skewers
+12. Spray with oil
+13. Season generously with salt and pepper
+14. Grill or pan-cook over medium-high heat for 5-10 minutes, turning frequently
+15. Brush with teriyaki glaze
+16. Finish on high heat to caramelize
+17. Make peanut sauce - Heat sugar, soy sauce, and vinegar until sugar dissolves
+18. Let cool slightly
+19. Add sriracha, peanut butter, and garlic
+20. Whisk together
+21. If too thick, add water and cornstarch mixture
+22. Cook eggs - Bring water to boil just under medium-high heat
+23. Add eggs
+24. Boil for 6 minutes and 30 seconds
+25. Transfer to ice bath for 5 minutes
+26. Crack shell all over
+27. Peel under running water
+28. Pat dry and cut in half
+29. Prepare vegetables - Season julienned carrots with salt, lime juice, and sesame oil
+30. Season avocado slices with flaky salt and lime juice
+31. Assemble bowl - Add desired amount of rice
+32. Add 1-2 chicken skewers
+33. Arrange carrots and cucumber ribbons
+34. Add 1-2 egg halves
+35. Garnish with green onion, spicy peanut sauce, crushed peanuts, and avocado slices
+36. Drizzle chicken with additional teriyaki glaze
 
 ## Notes
 - Can prepare sauces ahead of time

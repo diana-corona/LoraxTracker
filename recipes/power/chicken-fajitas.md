@@ -12,8 +12,6 @@
 - mexican
 
 ## Ingredients
-
-### Fajita Seasoning
 - 2 teaspoons ground cumin
 - 1½ teaspoons chili powder
 - 1 teaspoon salt
@@ -26,8 +24,6 @@
 - 2 limes
 - 1 onion, sliced
 - 3 bell peppers, seeded and sliced into strips
-
-### For Serving
 - Warm tortillas
 - Sour cream
 - Lime wedges
