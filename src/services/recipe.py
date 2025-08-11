@@ -113,13 +113,13 @@ class RecipeService:
         phase: str
     ) -> None:
         """
-        Save recipe selection to history.
+        Save recipe selection to history when user selects a recipe.
         
         Args:
             user_id: Telegram user ID
             recipe_id: Recipe identifier (filename without extension)
             meal_type: Type of meal (breakfast, lunch, dinner, snack)
-            phase: The hormonal phase when recipe was shown
+            phase: The hormonal phase when recipe was selected
         """
         now = datetime.now().isoformat()
         ttl = int(time.time()) + (30 * 24 * 60 * 60)  # 30 days
@@ -529,3 +529,95 @@ class RecipeService:
     def is_pantry_item(self, ingredient: str) -> bool:
         """Check if an ingredient is a common pantry item."""
         return any(item in ingredient.lower() for item in self.PANTRY_ITEMS)
+
+    def load_recipes_for_multi_phase_week(
+        self,
+        phase_groups: List[Dict],
+        user_id: Optional[str] = None
+    ) -> Dict[str, Dict[str, List[Dict[str, str]]]]:
+        """
+        Load recipes for a week that spans multiple phases, proportionally distributing recipes.
+        
+        Args:
+            phase_groups: List of phase groups from weekly plan
+            user_id: Optional user ID to enable recipe rotation based on selection history
+            
+        Returns:
+            Dictionary mapping phases to their recipes, grouped by meal type
+            {
+                'power': {
+                    'breakfast': [recipe1, recipe2],
+                    'lunch': [recipe3],
+                    ...
+                },
+                'nurture': {
+                    'breakfast': [recipe4],
+                    ...
+                }
+            }
+        """
+        total_days = 7
+        all_phase_recipes = {}
+        
+        # Calculate total days to determine recipe distribution
+        phase_durations = {}
+        for group in phase_groups:
+            phase = group['functional_phase'].value.lower()
+            days = (group['end_date'] - group['start_date']).days + 1
+            phase_durations[phase] = days
+            
+            # Initialize phase in results
+            if phase not in all_phase_recipes:
+                all_phase_recipes[phase] = {
+                    'breakfast': [],
+                    'lunch': [],
+                    'dinner': [],
+                    'snack': []
+                }
+        
+        # Get user's recipe selection history
+        selected_recipes = set()
+        if user_id:
+            try:
+                selected_recipes = set(self.get_recipe_history(user_id))
+                logger.info("Retrieved recipe selection history", extra={
+                    "user_id": user_id,
+                    "selected_count": len(selected_recipes)
+                })
+            except Exception as e:
+                logger.warning(
+                    "Failed to get recipe selection history",
+                    extra={
+                        "user_id": user_id,
+                        "error": str(e)
+                    }
+                )
+        
+        # Load recipes for each phase
+        for phase, days in phase_durations.items():
+            phase_weight = days / total_days
+            recipes_per_meal = max(1, round(2 * phase_weight))  # At least 1 recipe per meal type
+            
+            logger.info(f"Loading recipes for {phase} phase", extra={
+                "days": days,
+                "weight": phase_weight,
+                "recipes_per_meal": recipes_per_meal
+            })
+            
+            # Load recipes excluding previously selected ones
+            self.load_recipes_for_meal_planning(phase, user_id)
+            
+            # Get recipes for each meal type
+            for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+                recipes = self.get_recipes_by_meal_type(
+                    meal_type=meal_type,
+                    phase=phase,
+                    limit=recipes_per_meal,
+                    exclude_recipe_ids=list(selected_recipes)
+                )
+                
+                if recipes:
+                    all_phase_recipes[phase][meal_type].extend(recipes)
+                    logger.info(f"Added {len(recipes)} {meal_type} recipes for {phase} phase")
+        
+        return all_phase_recipes

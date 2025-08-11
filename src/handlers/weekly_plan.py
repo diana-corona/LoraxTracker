@@ -115,7 +115,7 @@ async def send_user_report(user: User) -> None:
             
         # Generate and format weekly plan
         try:
-            weekly_plan = generate_weekly_plan(cycle_events)
+            weekly_plan = generate_weekly_plan(cycle_events, user_id=user.user_id)
             formatted_plan = format_weekly_plan(weekly_plan)
             
             logger.info(

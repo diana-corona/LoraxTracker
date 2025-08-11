@@ -178,7 +178,7 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
             raise NoEventsError("No cycle events found. Please register a cycle event first using the /registrar command.")
         
         # Generate weekly plan and get formatted output
-        weekly_plan, formatted_plan = generate_weekly_plan(cycle_events)
+        weekly_plan, formatted_plan = generate_weekly_plan(cycle_events, user_id=user_id)
         
         # Check if next phase should be shown
         next_phase_info = None

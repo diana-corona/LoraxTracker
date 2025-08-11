@@ -39,33 +39,39 @@ def get_phase_emoji(phase: FunctionalPhaseType) -> str:
     }
     return emoji_map[phase]
 
-def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhaseType) -> PhaseRecommendations:
+def create_phase_recommendations(
+    phase_details: Dict,
+    phase_type: FunctionalPhaseType,
+    phase_groups: List[Dict],
+    user_id: Optional[str] = None
+) -> PhaseRecommendations:
     """
     Create enhanced phase recommendations with recipes.
     
     Args:
         phase_details: Traditional phase details from phase service
         phase_type: Functional phase type for recipe recommendations
+        phase_groups: List of phase groups from weekly plan
+        user_id: Optional user ID for recipe history tracking
         
     Returns:
         Enhanced PhaseRecommendations with recipe suggestions
     """
     try:
-        # Initialize recipe service and load recipes for this phase
+        # Initialize recipe service and load recipes considering multiple phases
         recipe_service = RecipeService()
-        recipe_service.load_recipes_for_meal_planning(phase_type.value.lower())
+        all_phase_recipes = recipe_service.load_recipes_for_multi_phase_week(phase_groups, user_id)
         
-        # Get recipe recommendations for each meal type
-        meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
+        # Get recipe recommendations for the current phase
+        phase = phase_type.value.lower()
+        phase_recipes = all_phase_recipes.get(phase, {})
+        
         recipe_recs = []
         recipe_ids = []  # Keep track of recipe IDs we'll need ingredients for
         
-        for meal_type in meal_types:
-            recipes = recipe_service.get_recipes_by_meal_type(
-                meal_type=meal_type,
-                phase=phase_type.value.lower(),
-                limit=2  # Get up to 2 recipes per meal type
-            )
+        # Get recipe recommendations for each meal type
+        for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+            recipes = phase_recipes.get(meal_type, [])
             if recipes:
                 # Keep track of first recipe's ID for ingredients
                 if recipes[0]['id'] not in recipe_ids:
@@ -73,7 +79,7 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
                     
                 recipe_recs.append({
                     'meal_type': meal_type,
-                    'recipes': [recipe for recipe in recipes]
+                    'recipes': recipes
                 })
         
         # Format recipe suggestions and generate shopping list
@@ -168,7 +174,10 @@ def create_meal_plan_preview(meals: List[Dict]) -> List[str]:
     
     return preview
 
-def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup]:
+def group_consecutive_phases(
+    daily_phases: Dict[date, Phase],
+    user_id: Optional[str] = None
+) -> List[PhaseGroup]:
     """Group consecutive days with the same phase."""
     phase_groups = []
     current_group = {"phase": None, "start": None, "end": None}
@@ -204,12 +213,12 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
             details = get_phase_details(phase.traditional_phase, 1)  # Day 1 for base recommendations
             
             # Get recommendations for both current and next phase (if transitioning)
-            current_recs = create_phase_recommendations(details, phase.functional_phase)
+            current_recs = create_phase_recommendations(details, phase.functional_phase, phase_groups, user_id)
             next_recs = None
             if next_phase:
                 # Always create next phase recommendations when available
                 next_details = get_phase_details(next_phase.traditional_phase, 1)
-                next_recs = create_phase_recommendations(next_details, next_phase.functional_phase)
+                next_recs = create_phase_recommendations(next_details, next_phase.functional_phase, phase_groups, user_id)
                 logger.info("Created next phase recommendations", extra={
                     "current_phase": phase.functional_phase.value,
                     "next_phase": next_phase.functional_phase.value,
@@ -240,7 +249,9 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
                 next_details = get_phase_details(next_phase.traditional_phase, 1)
                 current_group["next_phase_recommendations"] = create_phase_recommendations(
                     next_details,
-                    next_phase.functional_phase
+                    next_phase.functional_phase,
+                    phase_groups,
+                    user_id
                 )
                 logger.info("Updated next phase recommendations", extra={
                     "current_phase": phase.functional_phase.value,
@@ -327,7 +338,11 @@ def get_daily_phases(
     
     return daily_phases
 
-def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = None) -> Tuple[WeeklyPlan, List[str]]:
+def generate_weekly_plan(
+    events: List[CycleEvent], 
+    start_date: Optional[date] = None,
+    user_id: Optional[str] = None
+) -> Tuple[WeeklyPlan, List[str]]:
     """
     Generate a weekly plan based on cycle events.
     
@@ -361,7 +376,7 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
     daily_phases = get_daily_phases(events, start_date)
     
     # Group consecutive phases
-    phase_groups = group_consecutive_phases(daily_phases)
+    phase_groups = group_consecutive_phases(daily_phases, user_id)
     
     enhanced_plan = WeeklyPlan(
         start_date=start_date,
@@ -380,11 +395,15 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
     })
     
     # Format the plan using the latest events context
-    formatted_plan = format_weekly_plan(enhanced_plan, events)
+    formatted_plan = format_weekly_plan(enhanced_plan, events, user_id)
     
     return enhanced_plan, formatted_plan
 
-def format_weekly_plan(plan: WeeklyPlan, events: List[CycleEvent]) -> List[str]:
+def format_weekly_plan(
+    plan: WeeklyPlan, 
+    events: List[CycleEvent],
+    user_id: Optional[str] = None
+) -> List[str]:
     """
     Format a weekly plan into a list of strings for display.
     
@@ -498,7 +517,12 @@ def format_weekly_plan(plan: WeeklyPlan, events: List[CycleEvent]) -> List[str]:
             # Override next phase to Nurture
             transitioning_group.next_functional_phase = FunctionalPhaseType.NURTURE
             next_details = get_phase_details(transitioning_group.traditional_phase, 1)
-            transitioning_group.next_phase_recommendations = create_phase_recommendations(next_details, FunctionalPhaseType.NURTURE)
+            transitioning_group.next_phase_recommendations = create_phase_recommendations(
+                next_details,
+                FunctionalPhaseType.NURTURE,
+                plan.phase_groups,
+                user_id
+            )
 
         # Show next phase if we're within 3 days of transition or have passed the end
         if (transitioning_group.next_functional_phase and transitioning_group.next_phase_recommendations and 
