@@ -27,7 +27,8 @@ from src.services.utils import (
     calculate_cycle_day,
     determine_traditional_phase,
     determine_functional_phase,
-    get_menstruation_events
+    get_menstruation_events,
+    calculate_functional_phase_duration
 )
 
 def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = None) -> Phase:
@@ -56,7 +57,7 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
     traditional_phase, duration = determine_traditional_phase(cycle_day)
     functional_phase = determine_functional_phase(cycle_day)
     
-    # Calculate phase dates
+    # Calculate traditional phase dates
     menstruation_events = get_menstruation_events(events, reverse=True)
     if not menstruation_events:
         raise ValueError("No menstruation events found")
@@ -67,6 +68,12 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
     start_date = target_date - timedelta(days=days_since % duration)
     end_date = start_date + timedelta(days=duration)
     
+    # Calculate functional phase duration and dates
+    func_duration, func_start, func_end = calculate_functional_phase_duration(
+        cycle_day,
+        functional_phase
+    )
+    
     # Get phase details
     phase_details = get_phase_details(traditional_phase, cycle_day)
     
@@ -76,6 +83,9 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
         start_date=start_date,
         end_date=end_date,
         duration=duration,
+        functional_phase_duration=func_duration,
+        functional_phase_start=func_start,
+        functional_phase_end=func_end,
         typical_symptoms=phase_details["traditional_symptoms"],
         dietary_style=phase_details["dietary_style"],
         fasting_protocol=phase_details["fasting_protocol"],
@@ -119,9 +129,15 @@ def predict_next_phase(current_phase: Phase) -> Phase:
     # Map to functional phase
     next_functional_phase = determine_functional_phase(cycle_day)
     
-    # Set duration based on traditional phase
+    # Set durations and dates
     duration = TRADITIONAL_PHASE_DURATIONS[next_traditional_phase]
     next_end_date = next_start_date + timedelta(days=duration - 1)
+    
+    # Calculate functional phase duration and dates
+    func_duration, func_start, func_end = calculate_functional_phase_duration(
+        cycle_day,
+        next_functional_phase
+    )
     
     return Phase(
         traditional_phase=next_traditional_phase,
@@ -129,6 +145,9 @@ def predict_next_phase(current_phase: Phase) -> Phase:
         start_date=next_start_date,
         end_date=next_end_date,
         duration=duration,
+        functional_phase_duration=func_duration,
+        functional_phase_start=func_start,
+        functional_phase_end=func_end,
         typical_symptoms=phase_details["traditional_symptoms"],
         dietary_style=phase_details["dietary_style"],
         fasting_protocol=phase_details["fasting_protocol"],
@@ -249,9 +268,10 @@ def generate_phase_report(phase: Phase, events: List[CycleEvent]) -> str:
     """
     report = [
         "🌙 Phase Report",
-        f"Traditional Phase: {phase.traditional_phase.value.title()}",
-        f"Functional Phase: {phase.functional_phase.value.title()}",
-        f"Duration: {phase.duration} days ({phase.start_date} to {phase.end_date})",
+        f"Traditional Phase: {phase.traditional_phase.value.title()} ({phase.duration} days total)",
+        f"Functional Phase: {phase.functional_phase.value.title()} ({phase.functional_phase_duration} days remaining)",
+        (f"Period: {phase.start_date} to {phase.end_date} (traditional) | "
+         f"{phase.functional_phase_start} to {phase.functional_phase_end} (functional)"),
         "",
         "🩺 Common Symptoms:",
         *[f"• {symptom}" for symptom in phase.typical_symptoms],

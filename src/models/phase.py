@@ -31,7 +31,10 @@ class Phase(BaseModel):
     functional_phase: FunctionalPhaseType
     start_date: date
     end_date: date
-    duration: int
+    duration: int  # Traditional phase duration
+    functional_phase_duration: int  # Days remaining in current functional phase
+    functional_phase_start: date
+    functional_phase_end: date
     typical_symptoms: list[str]
     dietary_style: str
     fasting_protocol: str

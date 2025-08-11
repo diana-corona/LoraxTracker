@@ -154,8 +154,19 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
     """Group consecutive days with the same phase."""
     phase_groups = []
     current_group = {"phase": None, "start": None, "end": None}
+    sorted_dates = sorted(daily_phases.keys())
     
-    for day, phase in daily_phases.items():
+    for i, day in enumerate(sorted_dates):
+        phase = daily_phases[day]
+        next_day = sorted_dates[i + 1] if i < len(sorted_dates) - 1 else None
+        next_phase = daily_phases[next_day] if next_day else None
+        
+        # Check if this is a second Power phase occurrence
+        is_second_power = (
+            phase.functional_phase == FunctionalPhaseType.POWER
+            and phase.start_date >= date(phase.start_date.year, phase.start_date.month, 16)
+        )
+        
         if current_group["phase"] != phase.traditional_phase:
             if current_group["phase"]:
                 phase_groups.append(PhaseGroup(
@@ -163,18 +174,47 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
                     end_date=current_group["end"],
                     traditional_phase=current_group["phase"],
                     functional_phase=current_group["functional_phase"],
+                    functional_phase_duration=current_group["func_duration"],
+                    functional_phase_start=current_group["func_start"],
+                    functional_phase_end=current_group["func_end"],
+                    is_power_phase_second_occurrence=current_group["is_second_power"],
+                    next_functional_phase=current_group["next_func_phase"],
                     recommendations=current_group["recommendations"]
                 ))
+            
             details = get_phase_details(phase.traditional_phase, 1)  # Day 1 for base recommendations
+            
+            # Get recommendations for both current and next phase (if transitioning)
+            current_recs = create_phase_recommendations(details, phase.functional_phase)
+            next_recs = None
+            if next_phase:
+                next_details = get_phase_details(next_phase.traditional_phase, 1)
+                next_recs = create_phase_recommendations(next_details, next_phase.functional_phase)
+            
             current_group = {
                 "phase": phase.traditional_phase,
                 "start": day,
                 "end": day,
                 "functional_phase": phase.functional_phase,
-                "recommendations": create_phase_recommendations(details, phase.functional_phase)
+                "func_duration": phase.functional_phase_duration,
+                "func_start": phase.functional_phase_start,
+                "func_end": phase.functional_phase_end,
+                "is_second_power": is_second_power,
+                "next_func_phase": next_phase.functional_phase if next_phase else None,
+                "recommendations": current_recs,
+                "next_phase_recommendations": next_recs
             }
         else:
             current_group["end"] = day
+            current_group["func_duration"] = phase.functional_phase_duration
+            current_group["func_end"] = phase.functional_phase_end
+            current_group["next_func_phase"] = next_phase.functional_phase if next_phase else None
+            if next_phase:
+                next_details = get_phase_details(next_phase.traditional_phase, 1)
+                current_group["next_phase_recommendations"] = create_phase_recommendations(
+                    next_details, 
+                    next_phase.functional_phase
+                )
     
     # Add last group
     if current_group["phase"]:
@@ -183,6 +223,11 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
             end_date=current_group["end"],
             traditional_phase=current_group["phase"],
             functional_phase=current_group["functional_phase"],
+            functional_phase_duration=current_group["func_duration"],
+            functional_phase_start=current_group["func_start"],
+            functional_phase_end=current_group["func_end"],
+            is_power_phase_second_occurrence=current_group["is_second_power"],
+            next_functional_phase=current_group["next_func_phase"],
             recommendations=current_group["recommendations"]
         ))
     
@@ -240,7 +285,7 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
     # Group consecutive phases
     phase_groups = group_consecutive_phases(daily_phases)
     
-    return WeeklyPlan(
+    enhanced_plan = WeeklyPlan(
         start_date=start_date,
         end_date=end_date,
         next_cycle_date=next_cycle_date,
@@ -248,6 +293,15 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
         warning=warning,
         phase_groups=phase_groups
     )
+    
+    logger.debug("Generated enhanced weekly plan", extra={
+        "start_date": start_date,
+        "end_date": end_date,
+        "phase_groups": len(phase_groups),
+        "has_transitions": any(pg.has_phase_transition for pg in phase_groups)
+    })
+    
+    return enhanced_plan
 
 def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
     """
@@ -291,9 +345,17 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
     
     # Format each functional phase
     for functional_phase, data in functional_groups.items():
+        formatted.extend([""])
+        
+        # Get first group for this functional phase to show phase-wide info
+        first_group = data['groups'][0]
+        phase_label = f"{functional_phase.value.title()} Phase {get_phase_emoji(functional_phase)}"
+        if first_group.is_power_phase_second_occurrence:
+            phase_label += " (Second Occurrence)"
+        phase_label += f" ({first_group.functional_phase_duration} days remaining)"
+        formatted.append(phase_label)
+        
         formatted.extend([
-            "",
-            f"{functional_phase.value.title()} Phase {get_phase_emoji(functional_phase)}",
             f"⏱️ Fasting: {data['recommendations'].fasting_protocol}",
             "🥗 Key Foods:",
             *[f"  - {food}" for food in data['recommendations'].foods]
@@ -315,10 +377,23 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
                 else f"{group.start_date.strftime('%A %d')}"
             )
             
-            formatted.extend([
-                f"{date_range}: ({group.traditional_phase.value.title()})",
-                f"💪 Activities: {', '.join(TRADITIONAL_PHASE_RECOMMENDATIONS[group.traditional_phase])}"
-            ])
+            # Show both traditional and functional dates if they differ
+            date_info = [f"{date_range}:"]
+            if group.functional_phase_start != group.start_date or group.functional_phase_end != group.end_date:
+                date_info.append(
+                    f"Traditional phase: {group.traditional_phase.value.title()} | "
+                    f"Functional phase: {group.functional_phase_start.strftime('%b %d')} - "
+                    f"{group.functional_phase_end.strftime('%b %d')}"
+                )
+            else:
+                date_info.append(f"({group.traditional_phase.value.title()})")
+            
+            formatted.extend(date_info)
+            formatted.append(f"💪 Activities: {', '.join(TRADITIONAL_PHASE_RECOMMENDATIONS[group.traditional_phase])}")
+            
+            # Add transition warning if applicable
+            if group.has_phase_transition and group.transition_message:
+                formatted.extend(["", f"⚠️ {group.transition_message}"])
         
         # Add supplements if available (shared at functional phase level)
         if data['recommendations'].supplements:
