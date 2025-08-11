@@ -371,13 +371,6 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
             *[f"  - {food}" for food in data['recommendations'].foods]
         ])
         
-        # Add recipe suggestions if available
-        if data['recommendations'].meal_plan_preview:
-            formatted.extend([
-                "🍽️ Suggested Meals:",
-                *[f"  {meal}" for meal in data['recommendations'].meal_plan_preview]
-            ])
-        
         # Add next phase preview if this is the last day of the current phase
         last_group = data['groups'][-1]  # Get last group in this functional phase
         if last_group.next_functional_phase and last_group.functional_phase_end <= plan.end_date:
@@ -385,7 +378,9 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
             formatted.extend([
                 "",
                 f"Next Phase: {last_group.next_functional_phase.value.title()} {get_phase_emoji(last_group.next_functional_phase)} (starting {next_phase_start})",
-                f"⏱️ Fasting: {last_group.next_phase_recommendations.fasting_protocol}"
+                f"⏱️ Fasting: {last_group.next_phase_recommendations.fasting_protocol}",
+                "🥗 Key Foods:",
+                *[f"  - {food}" for food in last_group.next_phase_recommendations.foods]
             ])
         
         # Add supplements if available (shared at functional phase level)
