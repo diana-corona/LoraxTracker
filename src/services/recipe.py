@@ -383,12 +383,14 @@ class RecipeService:
         # If not a protein, remove amounts and measurements
         patterns_to_remove = [
             r'^\d+\.?\d*\s*',  # Numbers at start
+            r'[¼½¾⅛]',  # Unicode fractions
             r'[-/]',  # Remove hyphens and slashes
             r'\(.*?\)',  # Remove parenthetical content
             r'cups?|tablespoons?|tbsp|tsp|teaspoons?|pounds?|lbs?|ounces?|oz|heads?|medium|large|small|handful|pinch|dash',
             r'diced|chopped|sliced|minced|peeled|grated|crushed|ground|boneless|skinless',
             r'fresh|dried|frozen|canned|cooked|raw|prepared',
             r'optional|to taste',
+            r'whole|clove(s)?',  # Common descriptors
             r',.*$'  # Remove everything after a comma
         ]
         

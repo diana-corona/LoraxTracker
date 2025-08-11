@@ -98,16 +98,19 @@ class ShoppingListService:
                 ])
 
         # Add pantry items note if any were used
-        pantry_items = {
-            self.recipe_service.extract_base_ingredient(item)
-            for item, count in shopping_list.pantry.items()
-            if recipe_service.is_pantry_item(item)
-        }
-        if pantry_items:
+        # First consolidate pantry items by their base name
+        consolidated_pantry_items = set()
+        for item in shopping_list.pantry:
+            if recipe_service.is_pantry_item(item):
+                base_item = self.recipe_service.extract_base_ingredient(item)
+                if base_item:  # Skip empty strings
+                    consolidated_pantry_items.add(base_item)
+        
+        if consolidated_pantry_items:
             formatted.extend([
                 "\n🏠 Pantry Items to Check:",
                 "(These basic ingredients are assumed to be in most kitchens)",
-                *[f"  • {item}" for item in sorted(pantry_items)]
+                *[f"  • {item}" for item in sorted(consolidated_pantry_items)]
             ])
 
         return "\n".join(formatted)
