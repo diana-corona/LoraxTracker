@@ -21,8 +21,6 @@
 - 1 teaspoon dried oregano
 - ½ teaspoon paprika
 - ¼ teaspoon black pepper
-
-### Main Ingredients
 - 1½ pounds boneless skinless chicken breasts (2 to 3 pieces)
 - 4 tablespoons vegetable oil, divided
 - 2 limes

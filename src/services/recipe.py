@@ -2,6 +2,7 @@
 Recipe service for managing recipes and their ingredients.
 """
 import os
+import re
 from datetime import datetime, timedelta
 import time
 from typing import Dict, List, Set, Optional
@@ -49,13 +50,11 @@ class RecipeService:
             'tofu', 'tempeh', 'seitan'
         },
         'produce': {
-            'onion', 'garlic', 'tomato', 'carrot', 'celery', 'pepper', 'lettuce',
-            'spinach', 'kale', 'cucumber', 'zucchini', 'potato', 'lemon', 'lime',
-            'orange', 'apple', 'banana', 'berry', 'blueberry', 'strawberry',
-            'herbs', 'cilantro', 'parsley', 'basil', 'chive'
-        },
-        'dairy': {
-            'milk', 'cream', 'cheese', 'butter', 'yogurt', 'egg', 'eggs'
+            'onion', 'garlic', 'tomato', 'carrot', 'celery', 'bell pepper',
+            'lettuce', 'spinach', 'kale', 'cucumber', 'zucchini', 'potato',
+            'lemon', 'lime', 'orange', 'apple', 'banana', 'berry', 'blueberry',
+            'strawberry', 'herbs', 'cilantro', 'parsley', 'basil', 'chive',
+            'pepper', 'peppers', 'bell peppers'
         },
         'condiments': {
             'mayonnaise', 'mustard', 'ketchup', 'vinegar', 'sauce', 'dressing'
@@ -272,7 +271,13 @@ class RecipeService:
             logger.warning(f"Recipe not found: {recipe_id}")
         return recipe
 
-    def get_recipes_by_meal_type(self, meal_type: str, phase: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, str]]:
+    def get_recipes_by_meal_type(
+        self, 
+        meal_type: str, 
+        phase: Optional[str] = None, 
+        limit: Optional[int] = None,
+        exclude_recipe_ids: Optional[List[str]] = None
+    ) -> List[Dict[str, str]]:
         """
         Get recipes for a specific meal type, optionally filtered by phase and limited to N options.
         
@@ -280,10 +285,17 @@ class RecipeService:
             meal_type: Type of meal (breakfast, lunch, dinner, snack)
             phase: Optional phase to filter by (power, nurture, manifestation)
             limit: Optional maximum number of recipes to return
+            exclude_recipe_ids: Optional list of recipe IDs to exclude from results
+        
+        Returns:
+            List of dictionaries containing recipe information
         """
         # Get recipes from specific phase if provided, otherwise use all recipes
         source_recipes = self._phase_recipes.get(phase, {}) if phase else self._recipes
         
+        exclude_recipe_ids = set(exclude_recipe_ids or [])
+        
+        # Filter recipes by meal type and exclusions
         recipes = [
             {
                 'id': recipe_id,
@@ -291,19 +303,109 @@ class RecipeService:
                 'prep_time': recipe.prep_time
             }
             for recipe_id, recipe in source_recipes.items()
-            if meal_type in recipe.tags
+            if meal_type in recipe.tags and recipe_id not in exclude_recipe_ids
         ]
+
+        # Log warning if few recipes available after exclusions
+        if exclude_recipe_ids and len(recipes) < 2:
+            logger.warning(
+                "Few recipes available after exclusions",
+                extra={
+                    "meal_type": meal_type,
+                    "phase": phase,
+                    "available_count": len(recipes),
+                    "excluded_count": len(exclude_recipe_ids)
+                }
+            )
 
         # Limit number of recipes if specified
         if limit and len(recipes) > limit:
             recipes = recipes[:limit]
         
-        logger.info(f"Found {len(recipes)} recipes for meal type: {meal_type}" + (f" in phase {phase}" if phase else ""))
+        logger.info(
+            f"Found {len(recipes)} recipes for meal type: {meal_type}",
+            extra={
+                "phase": phase,
+                "excluded_count": len(exclude_recipe_ids),
+                "limit": limit
+            }
+        )
         return recipes
+
+    def extract_base_ingredient(self, ingredient: str) -> str:
+        """
+        Extract the base ingredient name from a full ingredient description.
+        
+        Args:
+            ingredient: Full ingredient description (e.g. "4 heads garlic, tops sliced off")
+            
+        Returns:
+            str: Base ingredient name (e.g. "garlic")
+            
+        Example:
+            >>> extract_base_ingredient("2 boneless skinless chicken breasts")
+            'chicken'
+            >>> extract_base_ingredient("500g lean ground beef")
+            'beef'
+        """
+        # Normalize proteins first
+        protein_mappings = {
+            'chicken': [
+                r'chicken\s*\w*',  # chicken breast, chicken thigh, etc.
+                r'boneless\s*skinless\s*chicken',
+            ],
+            'beef': [
+                r'beef\s*\w*',  # beef steak, beef roast, etc.
+                r'ground\s*beef',
+                r'steak',
+            ],
+            'pork': [
+                r'pork\s*\w*',  # pork chop, pork loin, etc.
+                r'ham',
+                r'bacon',
+            ],
+            'fish': [
+                r'salmon',
+                r'tuna',
+                r'cod',
+                r'tilapia',
+                r'fish\s*\w*',
+            ]
+        }
+        
+        # Try to match proteins first
+        cleaned = ingredient.lower()
+        for base_protein, patterns in protein_mappings.items():
+            for pattern in patterns:
+                if re.search(pattern, cleaned, re.IGNORECASE):
+                    return base_protein
+        
+        # If not a protein, remove amounts and measurements
+        patterns_to_remove = [
+            r'^\d+\.?\d*\s*',  # Numbers at start
+            r'[-/]',  # Remove hyphens and slashes
+            r'\(.*?\)',  # Remove parenthetical content
+            r'cups?|tablespoons?|tbsp|tsp|teaspoons?|pounds?|lbs?|ounces?|oz|heads?|medium|large|small|handful|pinch|dash',
+            r'diced|chopped|sliced|minced|peeled|grated|crushed|ground|boneless|skinless',
+            r'fresh|dried|frozen|canned|cooked|raw|prepared',
+            r'optional|to taste',
+            r',.*$'  # Remove everything after a comma
+        ]
+        
+        for pattern in patterns_to_remove:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+        
+        # Clean up extra spaces, including spaces around hyphens
+        cleaned = ' '.join(cleaned.split())
+        cleaned = cleaned.strip()
+        
+        return cleaned
 
     def categorize_ingredient(self, ingredient: str) -> str:
         """Categorize an ingredient based on keyword matching."""
-        ingredient_lower = ingredient.lower()
+        # Extract base ingredient first
+        base_ingredient = self.extract_base_ingredient(ingredient)
+        ingredient_lower = base_ingredient.lower()
         
         # First check if it's a pantry item
         if any(item in ingredient_lower for item in self.PANTRY_ITEMS):

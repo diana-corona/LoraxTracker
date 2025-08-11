@@ -1,7 +1,7 @@
 """
 Storage service for managing recipe selections during the multi-step selection process.
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from dataclasses import dataclass
 
 @dataclass
@@ -28,6 +28,18 @@ class RecipeSelection:
             'dinner': self.dinner,
             'snack': self.snack
         }
+        
+    def get_selected_recipes(self) -> List[str]:
+        """Get list of all currently selected recipe IDs (excluding skips)."""
+        return [
+            recipe_id for recipe_id in [
+                self.breakfast,
+                self.lunch,
+                self.dinner,
+                self.snack
+            ]
+            if recipe_id and recipe_id != 'skip'
+        ]
 
 class RecipeSelectionStorage:
     """In-memory storage for user recipe selections."""

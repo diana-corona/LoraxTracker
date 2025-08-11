@@ -445,7 +445,16 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         if current_idx < len(meal_types) - 1:
             # Show next meal selection with phase-specific options
             next_meal = meal_types[current_idx + 1]
-            next_recipes = recipe_service.get_recipes_by_meal_type(next_meal, phase=phase_type, limit=2)
+            # Get currently selected recipes to exclude
+            selected_recipes = RecipeSelectionStorage.get_selection(user_id).get_selected_recipes()
+            
+            # Get recipes for next meal, excluding already selected ones
+            next_recipes = recipe_service.get_recipes_by_meal_type(
+                meal_type=next_meal,
+                phase=phase_type,
+                limit=2,
+                exclude_recipe_ids=selected_recipes
+            )
             
             # Save shown recipes to history
             for recipe in next_recipes:
@@ -478,9 +487,13 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     text="No shopping list generated as all meals were skipped."
                 )
             else:
-                # Generate and format shopping list for selected meals
+                # Generate shopping list and recipe links together
+                selected_recipes = []
+                missing_urls = []
+
+                # First collect recipe information
                 ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
-                shopping_service = ShoppingListService()
+                shopping_service = ShoppingListService(recipe_service)
                 shopping_list = shopping_service.generate_list(ingredients)
                 formatted_list = shopping_service.format_list(shopping_list, recipe_service)
 
@@ -489,6 +502,52 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     chat_id=chat_id,
                     text=formatted_list
                 )
+
+                # Then process recipe links
+                for recipe_id in selected_recipe_ids:
+                    recipe = recipe_service.get_recipe_by_id(recipe_id)
+                    if recipe:
+                        if recipe.url:
+                            selected_recipes.append((recipe.title, recipe.url))
+                        else:
+                            missing_urls.append(recipe.title)
+
+                if missing_urls:
+                    logger.warning("Some recipes missing URLs", extra={
+                        "user_id": user_id,
+                        "recipes": missing_urls
+                    })
+
+                if selected_recipes:
+                    recipe_links_msg = ["📖 Recipe Links\n"]
+                    meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
+                    selections = selection.to_dict()
+                    
+                    for meal_type, emoji in zip(meal_types, [MEAL_EMOJIS[m] for m in meal_types]):
+                        recipe_id = selections.get(meal_type)
+                        if recipe_id and recipe_id != 'skip':
+                            recipe = recipe_service.get_recipe_by_id(recipe_id)
+                            if recipe and recipe.url:
+                                recipe_links_msg.append(f"{emoji} {meal_type.title()}: {recipe.title}\n{recipe.url}")
+                    
+                    recipe_links_msg.append("\nHappy cooking! 👩‍🍳")
+                    
+                    # Send recipe links message
+                    telegram.send_message(
+                        chat_id=chat_id,
+                        text="\n\n".join(recipe_links_msg)
+                    )
+
+                    logger.info("Sent recipe links", extra={
+                        "user_id": user_id,
+                        "recipe_count": len(selected_recipes)
+                    })
+                else:
+                    logger.info("No recipe links to send", extra={
+                        "user_id": user_id,
+                        "selected_recipes": len(selected_recipe_ids),
+                        "has_urls": 0
+                    })
 
         return {
             "statusCode": 200,
