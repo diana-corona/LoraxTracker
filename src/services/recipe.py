@@ -3,8 +3,9 @@ Recipe service for managing recipes and their ingredients.
 """
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
+from datetime import timedelta
 from typing import Dict, List, Set, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,7 +48,7 @@ class RecipeService:
     CATEGORY_PATTERNS = {
         'proteins': {
             'chicken', 'beef', 'salmon', 'fish', 'pork', 'turkey', 'shrimp', 'tuna',
-            'tofu', 'tempeh', 'seitan'
+            'tofu', 'tempeh', 'seitan', 'eggs', 'egg'
         },
         'produce': {
             'onion', 'garlic', 'tomato', 'carrot', 'celery', 'bell pepper',
@@ -55,6 +56,10 @@ class RecipeService:
             'lemon', 'lime', 'orange', 'apple', 'banana', 'berry', 'blueberry',
             'strawberry', 'herbs', 'cilantro', 'parsley', 'basil', 'chive',
             'pepper', 'peppers', 'bell peppers'
+        },
+        'dairy': {
+            'milk', 'cream', 'half and half', 'cheese', 'feta', 'yogurt', 
+            'butter', 'cheddar', 'mozzarella', 'parmesan', 'ricotta'
         },
         'condiments': {
             'mayonnaise', 'mustard', 'ketchup', 'vinegar', 'sauce', 'dressing'
@@ -350,6 +355,10 @@ class RecipeService:
         """
         # Normalize proteins first
         protein_mappings = {
+            'eggs': [
+                r'eggs?\s*\w*',  # eggs, egg whites, etc.
+                r'large\s*eggs?',
+            ],
             'chicken': [
                 r'chicken\s*\w*',  # chicken breast, chicken thigh, etc.
                 r'boneless\s*skinless\s*chicken',
@@ -401,6 +410,17 @@ class RecipeService:
         cleaned = ' '.join(cleaned.split())
         cleaned = cleaned.strip()
         
+        # Special handling for dairy items
+        dairy_mappings = {
+            'half and half': [r'half\s*and\s*half'],
+            'feta': [r'feta\s*\w*', r'crumbled\s*feta'],
+        }
+        
+        for base_dairy, patterns in dairy_mappings.items():
+            for pattern in patterns:
+                if re.search(pattern, ingredient.lower(), re.IGNORECASE):
+                    return base_dairy
+        
         return cleaned
 
     def categorize_ingredient(self, ingredient: str) -> str:
@@ -434,10 +454,27 @@ class RecipeService:
             category = self.categorize_ingredient(ingredient)
             if hasattr(ingredients, category):
                 getattr(ingredients, category).add(ingredient)
+                logger.debug(f"Categorized '{ingredient}' as {category}")
             else:
                 ingredients.pantry.add(ingredient)
+                logger.debug(f"Defaulted '{ingredient}' to pantry (no matching category)")
 
-        logger.info(f"Categorized {len(recipe.ingredients)} ingredients for recipe: {recipe.title}")
+        # Enhanced logging of categorization results
+        logger.info(
+            f"Categorized {len(recipe.ingredients)} ingredients for recipe: {recipe.title}",
+            extra={
+                "recipe_id": recipe_id,
+                "categories": {
+                    "proteins": len(ingredients.proteins),
+                    "dairy": len(ingredients.dairy),
+                    "produce": len(ingredients.produce),
+                    "condiments": len(ingredients.condiments),
+                    "baking": len(ingredients.baking),
+                    "nuts": len(ingredients.nuts),
+                    "pantry": len(ingredients.pantry)
+                }
+            }
+        )
         return ingredients
 
     def get_multiple_recipe_ingredients(self, recipe_ids: List[str]) -> CategorizedIngredients:
@@ -445,11 +482,44 @@ class RecipeService:
         combined = CategorizedIngredients()
         
         for recipe_id in recipe_ids:
+            recipe = self.get_recipe_by_id(recipe_id)
+            if not recipe:
+                logger.warning(f"Skipping missing recipe: {recipe_id}")
+                continue
+                
+            logger.info(f"Processing ingredients for recipe: {recipe.title}")
             recipe_ingredients = self.get_recipe_ingredients(recipe_id)
+            
+            # Log ingredients by category before combining
             for category in ['proteins', 'produce', 'dairy', 'condiments', 'baking', 'nuts', 'pantry']:
-                getattr(combined, category).update(getattr(recipe_ingredients, category))
+                category_items = getattr(recipe_ingredients, category)
+                if category_items:
+                    logger.debug(
+                        f"Recipe {recipe.title} {category} ingredients:",
+                        extra={
+                            "recipe_id": recipe_id,
+                            "category": category,
+                            "items": list(category_items)
+                        }
+                    )
+                getattr(combined, category).update(category_items)
 
-        logger.info(f"Combined ingredients for {len(recipe_ids)} recipes")
+        # Log final combined ingredients by category
+        logger.info(
+            f"Combined ingredients for {len(recipe_ids)} recipes",
+            extra={
+                "recipe_ids": recipe_ids,
+                "categories": {
+                    "proteins": list(combined.proteins),
+                    "dairy": list(combined.dairy),
+                    "produce": list(combined.produce),
+                    "condiments": list(combined.condiments),
+                    "baking": list(combined.baking),
+                    "nuts": list(combined.nuts),
+                    "pantry": list(combined.pantry)
+                }
+            }
+        )
         return combined
 
     def is_pantry_item(self, ingredient: str) -> bool:

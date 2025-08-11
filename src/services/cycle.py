@@ -22,7 +22,8 @@ from src.services.utils import (
     get_menstruation_events,
     calculate_cycle_day,
     determine_traditional_phase,
-    determine_functional_phase
+    determine_functional_phase,
+    calculate_functional_phase_duration
 )
 
 def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[str]]:
@@ -135,12 +136,18 @@ def analyze_cycle_phase(events: List[CycleEvent], target_date: Optional[date] = 
     # Get phase details from phase service
     phase_details = get_phase_details(phase_type, cycle_day)
 
+    # Calculate functional phase information
+    func_duration, func_start, func_end = calculate_functional_phase_duration(cycle_day, functional_phase)
+
     return Phase(
         traditional_phase=phase_type,
         functional_phase=functional_phase,
         start_date=start_date,
         end_date=end_date,
         duration=duration,
+        functional_phase_duration=func_duration,
+        functional_phase_start=func_start,
+        functional_phase_end=func_end,
         typical_symptoms=phase_details["traditional_symptoms"],
         dietary_style=phase_details["dietary_style"],
         fasting_protocol=phase_details["fasting_protocol"],

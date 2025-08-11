@@ -5,7 +5,7 @@ These utilities are used across multiple service modules to handle common
 operations like event filtering, cycle day calculation, and phase mapping.
 """
 from typing import List, Optional, Tuple
-from datetime import date
+from datetime import date, timedelta
 
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType
@@ -68,29 +68,38 @@ def determine_traditional_phase(
     custom_durations: Optional[dict] = None
 ) -> Tuple[TraditionalPhaseType, int]:
     """
-    Determine traditional phase based on cycle day.
+    Determine traditional phase and remaining days based on cycle day.
     
     Args:
         cycle_day: Current day in the cycle (1-based)
         custom_durations: Optional custom phase durations
         
     Returns:
-        Tuple of (phase type, duration)
+        Tuple of (phase type, remaining days in current phase)
         
     Example:
-        >>> phase, duration = determine_traditional_phase(5)
+        >>> phase, remaining = determine_traditional_phase(5)
         >>> assert phase == TraditionalPhaseType.MENSTRUATION
-        >>> assert duration == 5
+        >>> assert remaining == 1  # On day 5, 1 day remaining in menstruation
     """
     durations = custom_durations or TRADITIONAL_PHASE_DURATIONS
-    days_counted = 0
     
-    for phase, duration in durations.items():
-        days_counted += duration
-        if cycle_day <= days_counted:
-            return phase, duration
-            
-    return TraditionalPhaseType.LUTEAL, durations[TraditionalPhaseType.LUTEAL]
+    # Define phase boundaries
+    if cycle_day <= 5:  # Days 1-5
+        remaining_days = 5 - cycle_day + 1
+        return TraditionalPhaseType.MENSTRUATION, remaining_days
+    elif cycle_day <= 14:  # Days 6-14
+        remaining_days = 14 - cycle_day + 1
+        return TraditionalPhaseType.FOLLICULAR, remaining_days
+    elif cycle_day <= 17:  # Days 15-17
+        remaining_days = 17 - cycle_day + 1
+        return TraditionalPhaseType.OVULATION, remaining_days
+    else:  # Days 18-28
+        if cycle_day <= 28:
+            remaining_days = 28 - cycle_day + 1
+        else:
+            remaining_days = 1  # If beyond day 28, show 1 day remaining
+        return TraditionalPhaseType.LUTEAL, remaining_days
 
 def determine_functional_phase(cycle_day: int) -> FunctionalPhaseType:
     """

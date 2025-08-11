@@ -268,10 +268,8 @@ def generate_phase_report(phase: Phase, events: List[CycleEvent]) -> str:
     """
     report = [
         "🌙 Phase Report",
-        f"Traditional Phase: {phase.traditional_phase.value.title()} ({phase.duration} days total)",
+        f"Traditional Phase: {phase.traditional_phase.value.title()} ({phase.duration} days remaining)",
         f"Functional Phase: {phase.functional_phase.value.title()} ({phase.functional_phase_duration} days remaining)",
-        (f"Period: {phase.start_date} to {phase.end_date} (traditional) | "
-         f"{phase.functional_phase_start} to {phase.functional_phase_end} (functional)"),
         "",
         "🩺 Common Symptoms:",
         *[f"• {symptom}" for symptom in phase.typical_symptoms],

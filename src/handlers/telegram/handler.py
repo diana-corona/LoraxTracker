@@ -33,7 +33,7 @@ from .commands import (
 )
 from .callbacks import handle_callback_query
 
-from src.utils.logging import logger
+from src.utils.logging import logger, log_exception
 
 tracer = Tracer(service="telegram_bot")
 
@@ -195,7 +195,10 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
             }
         raise
     except Exception as e:
-        logger.exception("Error processing webhook")
+        log_exception(logger, "Error processing webhook", extra={
+            "error_type": type(e).__name__,
+            "error_details": str(e)
+        })
         return {
             "statusCode": 200,  # Keep 200 for other errors to avoid infinite retries
             "headers": {"Content-Type": "application/json"},
@@ -276,7 +279,12 @@ def handle_message(message: Dict[str, Any]) -> Dict[str, Any]:
             }
         raise
     except Exception as e:
-        logger.exception(f"Error handling command {command}")
+        log_exception(logger, f"Error handling command {command}", extra={
+            "command": command,
+            "chat_id": chat_id,
+            "error_type": type(e).__name__,
+            "error_details": str(e)
+        })
         telegram.send_message(
             chat_id=chat_id,
             text=format_error_message(e)
