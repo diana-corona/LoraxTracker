@@ -6,26 +6,9 @@ from typing import Dict, Any
 
 from aws_lambda_powertools import Logger
 from src.utils.clients import get_clients
+from src.utils.telegram.command_definitions import get_start_message
 
 logger = Logger()
-
-# Add help command to the list
-START_MESSAGE_PRIVATE = (
-    "Hi! I'm Lorax, your menstrual cycle assistant. 🌙\n\n"
-    "You can use these commands:\n\n"
-    "📝 Basic Commands:\n"
-    "/help - Show all available commands\n"
-    "/register YYYY-MM-DD - Register a cycle event\n"
-    "/register YYYY-MM-DD to YYYY-MM-DD - Register events for a date range\n\n"
-    "📊 Information Commands:\n"
-    "/phase - View your current phase\n"
-    "/predict - View next cycle prediction\n"
-    "/statistics - View your cycle statistics\n\n"
-    "📅 Planning Commands:\n"
-    "/weeklyplan - Get personalized weekly recommendations and meal planning"
-)
-
-START_MESSAGE_GROUP = "Hi! I'm Lorax, your weekly planner assistant. 🌙"
 
 def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
@@ -56,7 +39,7 @@ def handle_start_command(user_id: str, chat_id: str) -> Dict[str, Any]:
             }
         )
         
-        message = START_MESSAGE_GROUP if is_group else START_MESSAGE_PRIVATE
+        message = get_start_message(is_private_chat=not is_group)
         
         # Get clients lazily
         dynamo, telegram = get_clients()

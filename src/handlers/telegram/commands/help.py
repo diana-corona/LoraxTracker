@@ -4,26 +4,9 @@ Help command handler for displaying available commands.
 from typing import Dict, Any
 from aws_lambda_powertools import Logger
 from src.utils.clients import get_telegram
+from src.utils.telegram.command_definitions import get_help_message
 
 logger = Logger()
-
-HELP_MESSAGE = """
-Available commands:
-
-🚀 Basic Commands:
-/start - Start interacting with the bot
-/help - Show this help message
-/register - Register an event (Format: YYYY-MM-DD)
-
-📊 Information Commands:
-/phase - Get your current cycle phase
-/predict - Get predictions for your next cycle
-/statistics - View your cycle statistics
-/history - View your period history (last 6 months)
-
-📅 Planning Commands:
-/weeklyplan - Get personalized weekly recommendations and meal planning
-"""
 
 def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     """
@@ -46,7 +29,7 @@ def handle_help_command(user_id: str, chat_id: str) -> Dict[str, Any]:
         telegram = get_telegram()
         response = telegram.send_message(
             chat_id=chat_id,
-            text=HELP_MESSAGE
+            text=get_help_message()
         )
         
         logger.info("Help message sent successfully", extra={
