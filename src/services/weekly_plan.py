@@ -2,7 +2,7 @@
 Service module for generating weekly cycle plans.
 """
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import date, datetime, timedelta
 
 try:
@@ -17,7 +17,12 @@ except ImportError:
 from src.models.event import CycleEvent
 from src.models.phase import Phase, TraditionalPhaseType, FunctionalPhaseType
 from src.models.weekly_plan import WeeklyPlan, PhaseGroup, PhaseRecommendations
-from src.services.constants import TRADITIONAL_PHASE_RECOMMENDATIONS, MEAL_ICONS
+from src.services.constants import (
+    TRADITIONAL_PHASE_RECOMMENDATIONS,
+    MEAL_ICONS,
+    FUNCTIONAL_PHASE_MAPPING
+)
+from src.services.utils import calculate_cycle_day
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
 from src.services.phase import get_phase_details, predict_next_phase
 from src.services.recipe import RecipeService
@@ -277,7 +282,36 @@ def get_daily_phases(
     for i in range(days):
         target_date = start_date + timedelta(days=i)
         if target_date >= phase.end_date:
-            next_phase = predict_next_phase(phase)
+            # The next phase after Power should be Nurture if we're in the second Power occurrence
+            is_second_power = (
+                phase.functional_phase == FunctionalPhaseType.POWER
+                and phase.start_date >= date(phase.start_date.year, phase.start_date.month, 16)
+            )
+            
+            # Calculate cycle day to determine which Power phase we're in
+            cycle_day = calculate_cycle_day(events, target_date)
+            
+            # After second Power phase (days 16-19), always transition to Nurture
+            if (phase.functional_phase == FunctionalPhaseType.POWER and 
+                any(start <= cycle_day <= end 
+                    for start, end, p in FUNCTIONAL_PHASE_MAPPING 
+                    if start >= 16 and p == FunctionalPhaseType.POWER)):
+                logger.info("Second Power phase transitioning to Nurture", extra={
+                    "current_phase": phase.functional_phase.value,
+                    "date": phase.start_date.isoformat()
+                })
+                next_phase = Phase(
+                    start_date=phase.end_date + timedelta(days=1),
+                    end_date=phase.end_date + timedelta(days=7),
+                    traditional_phase=phase.traditional_phase,
+                    functional_phase=FunctionalPhaseType.NURTURE,
+                    functional_phase_start=phase.end_date + timedelta(days=1),
+                    functional_phase_end=phase.end_date + timedelta(days=7),
+                    functional_phase_duration=7
+                )
+            else:
+                next_phase = predict_next_phase(phase)
+            
             logger.info("Phase transition detected", extra={
                 "date": target_date.isoformat(),
                 "current_phase": phase.functional_phase.value,
@@ -285,20 +319,15 @@ def get_daily_phases(
                 "current_end": phase.functional_phase_end.isoformat(),
                 "next_start": next_phase.functional_phase_start.isoformat(),
                 "is_power_phase": phase.functional_phase == FunctionalPhaseType.POWER,
-                "is_second_power": phase.start_date >= date(phase.start_date.year, phase.start_date.month, 16),
-                "next_phase_sequence": {
-                    "power_first": FunctionalPhaseType.MANIFESTATION.value,
-                    "manifestation": FunctionalPhaseType.POWER.value,
-                    "power_second": FunctionalPhaseType.NURTURE.value,
-                    "nurture": FunctionalPhaseType.POWER.value
-                }
+                "is_second_power": is_second_power,
+                "next_is_nurture": next_phase.functional_phase == FunctionalPhaseType.NURTURE
             })
             phase = next_phase
         daily_phases[target_date] = phase
     
     return daily_phases
 
-def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = None) -> WeeklyPlan:
+def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = None) -> Tuple[WeeklyPlan, List[str]]:
     """
     Generate a weekly plan based on cycle events.
     
@@ -307,7 +336,9 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
         start_date: Optional start date, defaults to tomorrow
         
     Returns:
-        WeeklyPlan object containing phase predictions and recommendations
+        Tuple containing:
+        - WeeklyPlan object containing phase predictions and recommendations
+        - List of formatted strings for display
     """
     if not events:
         raise ValueError("No events provided for plan generation")
@@ -348,9 +379,12 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
         "has_transitions": any(pg.has_phase_transition for pg in phase_groups)
     })
     
-    return enhanced_plan
+    # Format the plan using the latest events context
+    formatted_plan = format_weekly_plan(enhanced_plan, events)
+    
+    return enhanced_plan, formatted_plan
 
-def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
+def format_weekly_plan(plan: WeeklyPlan, events: List[CycleEvent]) -> List[str]:
     """
     Format a weekly plan into a list of strings for display.
     
@@ -396,7 +430,9 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
         
         # Get first group for this functional phase to show phase-wide info
         first_group = data['groups'][0]
-        days_remaining = max(0, (first_group.functional_phase_end - datetime.now().date()).days)
+        # Get phase details from the Phase object to match /phase command
+        current_phase = analyze_cycle_phase(events)
+        days_remaining = current_phase.functional_phase_duration
         
         # Log phase transitions for troubleshooting
         logger.info("Phase transition details", extra={
@@ -449,10 +485,24 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
                               and (days_until_transition <= 3 or days_until_transition < 0))
         })
         
+        # Use cycle day to determine if this is the second Power phase
+        cycle_day = calculate_cycle_day(events)
+        is_second_power = (
+            functional_phase == FunctionalPhaseType.POWER and
+            any(start <= cycle_day <= end 
+                for start, end, p in FUNCTIONAL_PHASE_MAPPING 
+                if start >= 16 and p == FunctionalPhaseType.POWER)
+        )
+
+        if is_second_power:
+            # Override next phase to Nurture
+            transitioning_group.next_functional_phase = FunctionalPhaseType.NURTURE
+            next_details = get_phase_details(transitioning_group.traditional_phase, 1)
+            transitioning_group.next_phase_recommendations = create_phase_recommendations(next_details, FunctionalPhaseType.NURTURE)
+
         # Show next phase if we're within 3 days of transition or have passed the end
-        if (transitioning_group.next_functional_phase 
-            and transitioning_group.next_phase_recommendations 
-            and (days_until_transition <= 3 or days_until_transition < 0)):
+        if (transitioning_group.next_functional_phase and transitioning_group.next_phase_recommendations and 
+            (days_until_transition <= 3 or days_until_transition < 0)):
             logger.info("Next phase will be shown", extra={
                 "current_phase": functional_phase.value,
                 "next_phase": transitioning_group.next_functional_phase.value,
