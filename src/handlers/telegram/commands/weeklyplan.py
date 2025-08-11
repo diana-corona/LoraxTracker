@@ -181,13 +181,37 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
         weekly_plan = generate_weekly_plan(cycle_events)
         formatted_plan = format_weekly_plan(weekly_plan)
         
+        # Check if next phase should be shown
+        next_phase_info = None
+        if weekly_plan.phase_groups:
+            last_group = weekly_plan.phase_groups[-1]
+            days_until_transition = (last_group.functional_phase_end - datetime.now().date()).days
+            next_phase = last_group.next_functional_phase.value if last_group.next_functional_phase else None
+            
+            logger.info("Phase transition check", extra={
+                "user_id": user_id,
+                "current_phase": last_group.functional_phase.value,
+                "next_phase": next_phase,
+                "days_until_transition": days_until_transition,
+                "has_next_phase": bool(last_group.next_functional_phase),
+                "has_next_recs": bool(last_group.next_phase_recommendations)
+            })
+            
+            if days_until_transition <= 3:
+                next_phase_info = {
+                    "phase": next_phase,
+                    "days": days_until_transition,
+                    "has_recs": bool(last_group.next_phase_recommendations)
+                }
+        
         logger.info(
             "Generated weekly plan",
             extra={
                 "user_id": user_id,
                 "plan_start": weekly_plan.start_date.isoformat(),
                 "plan_end": weekly_plan.end_date.isoformat(),
-                "phase_groups": len(weekly_plan.phase_groups)
+                "phase_groups": len(weekly_plan.phase_groups),
+                "next_phase_info": next_phase_info
             }
         )
         

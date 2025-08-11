@@ -3,7 +3,7 @@ Service module for generating weekly cycle plans.
 """
 from enum import Enum
 from typing import Dict, List, Optional, Any
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 try:
     from aws_lambda_powertools import Logger
@@ -53,6 +53,7 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
         # Get recipe recommendations for each meal type
         meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
         recipe_recs = []
+        recipe_ids = []  # Keep track of recipe IDs we'll need ingredients for
         
         for meal_type in meal_types:
             recipes = recipe_service.get_recipes_by_meal_type(
@@ -61,6 +62,10 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
                 limit=2  # Get up to 2 recipes per meal type
             )
             if recipes:
+                # Keep track of first recipe's ID for ingredients
+                if recipes[0]['id'] not in recipe_ids:
+                    recipe_ids.append(recipes[0]['id'])
+                    
                 recipe_recs.append({
                     'meal_type': meal_type,
                     'recipes': [recipe for recipe in recipes]
@@ -70,9 +75,7 @@ def create_phase_recommendations(phase_details: Dict, phase_type: FunctionalPhas
         recipe_suggestions = format_recipe_suggestions(recipe_recs)
         meal_plan_preview = create_meal_plan_preview(recipe_recs)
         
-        # Generate shopping list using RecipeService directly since we have recipe IDs
-        recipe_service = RecipeService()
-        recipe_ids = [meal['recipes'][0]['id'] for meal in recipe_recs]  # Use first recipe from each meal type
+        # Get ingredients for all unique recipes
         ingredients = recipe_service.get_multiple_recipe_ingredients(recipe_ids)
         
         # Format ingredients into shopping preview
@@ -189,7 +192,8 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
                     functional_phase_end=current_group["func_end"],
                     is_power_phase_second_occurrence=current_group["is_second_power"],
                     next_functional_phase=current_group["next_func_phase"],
-                    recommendations=current_group["recommendations"]
+                    recommendations=current_group["recommendations"],
+                    next_phase_recommendations=current_group["next_phase_recommendations"]
                 ))
             
             details = get_phase_details(phase.traditional_phase, 1)  # Day 1 for base recommendations
@@ -198,8 +202,14 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
             current_recs = create_phase_recommendations(details, phase.functional_phase)
             next_recs = None
             if next_phase:
+                # Always create next phase recommendations when available
                 next_details = get_phase_details(next_phase.traditional_phase, 1)
                 next_recs = create_phase_recommendations(next_details, next_phase.functional_phase)
+                logger.info("Created next phase recommendations", extra={
+                    "current_phase": phase.functional_phase.value,
+                    "next_phase": next_phase.functional_phase.value,
+                    "days_to_end": (phase.functional_phase_end - datetime.now().date()).days
+                })
             
             current_group = {
                 "phase": phase.traditional_phase,
@@ -219,12 +229,22 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
             current_group["func_duration"] = phase.functional_phase_duration
             current_group["func_end"] = phase.functional_phase_end
             current_group["next_func_phase"] = next_phase.functional_phase if next_phase else None
+            
+            # Always update next phase recommendations when available
             if next_phase:
                 next_details = get_phase_details(next_phase.traditional_phase, 1)
                 current_group["next_phase_recommendations"] = create_phase_recommendations(
-                    next_details, 
+                    next_details,
                     next_phase.functional_phase
                 )
+                logger.info("Updated next phase recommendations", extra={
+                    "current_phase": phase.functional_phase.value,
+                    "next_phase": next_phase.functional_phase.value,
+                    "days_to_end": (phase.functional_phase_end - datetime.now().date()).days,
+                    "start_date": phase.functional_phase_start.isoformat(),
+                    "end_date": phase.functional_phase_end.isoformat(),
+                    "has_next_recs": bool(next_recs)
+                })
     
     # Add last group
     if current_group["phase"]:
@@ -238,7 +258,8 @@ def group_consecutive_phases(daily_phases: Dict[date, Phase]) -> List[PhaseGroup
             functional_phase_end=current_group["func_end"],
             is_power_phase_second_occurrence=current_group["is_second_power"],
             next_functional_phase=current_group["next_func_phase"],
-            recommendations=current_group["recommendations"]
+            recommendations=current_group["recommendations"],
+            next_phase_recommendations=current_group["next_phase_recommendations"]
         ))
     
     return phase_groups
@@ -256,7 +277,23 @@ def get_daily_phases(
     for i in range(days):
         target_date = start_date + timedelta(days=i)
         if target_date >= phase.end_date:
-            phase = predict_next_phase(phase)
+            next_phase = predict_next_phase(phase)
+            logger.info("Phase transition detected", extra={
+                "date": target_date.isoformat(),
+                "current_phase": phase.functional_phase.value,
+                "next_phase": next_phase.functional_phase.value,
+                "current_end": phase.functional_phase_end.isoformat(),
+                "next_start": next_phase.functional_phase_start.isoformat(),
+                "is_power_phase": phase.functional_phase == FunctionalPhaseType.POWER,
+                "is_second_power": phase.start_date >= date(phase.start_date.year, phase.start_date.month, 16),
+                "next_phase_sequence": {
+                    "power_first": FunctionalPhaseType.MANIFESTATION.value,
+                    "manifestation": FunctionalPhaseType.POWER.value,
+                    "power_second": FunctionalPhaseType.NURTURE.value,
+                    "nurture": FunctionalPhaseType.POWER.value
+                }
+            })
+            phase = next_phase
         daily_phases[target_date] = phase
     
     return daily_phases
@@ -276,7 +313,7 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
         raise ValueError("No events provided for plan generation")
     
     if start_date is None:
-        start_date = date.today() + timedelta(days=1)  # Start from tomorrow
+        start_date = datetime.now().date() + timedelta(days=1)  # Start from tomorrow
         
     end_date = start_date + timedelta(days=6)
     
@@ -304,7 +341,7 @@ def generate_weekly_plan(events: List[CycleEvent], start_date: Optional[date] = 
         phase_groups=phase_groups
     )
     
-    logger.debug("Generated enhanced weekly plan", extra={
+    logger.info("Generated enhanced weekly plan", extra={
         "start_date": start_date,
         "end_date": end_date,
         "phase_groups": len(phase_groups),
@@ -359,10 +396,23 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
         
         # Get first group for this functional phase to show phase-wide info
         first_group = data['groups'][0]
+        days_remaining = max(0, (first_group.functional_phase_end - datetime.now().date()).days)
+        
+        # Log phase transitions for troubleshooting
+        logger.info("Phase transition details", extra={
+            "functional_phase": functional_phase.value,
+            "days_remaining": days_remaining,
+            "end_date": first_group.end_date.isoformat(),
+            "func_phase_end": first_group.functional_phase_end.isoformat(),
+            "has_next_phase": bool(first_group.next_functional_phase),
+            "next_phase_recs": bool(first_group.next_phase_recommendations)
+        })
+        
+        # Format phase label
         phase_label = f"{functional_phase.value.title()} Phase {get_phase_emoji(functional_phase)}"
         if first_group.is_power_phase_second_occurrence:
             phase_label += " (Second Occurrence)"
-        phase_label += f" ({first_group.functional_phase_duration} days remaining)"
+        phase_label += f" ({days_remaining} days remaining)"
         formatted.append(phase_label)
         
         formatted.extend([
@@ -371,17 +421,60 @@ def format_weekly_plan(plan: WeeklyPlan) -> List[str]:
             *[f"  - {food}" for food in data['recommendations'].foods]
         ])
         
-        # Add next phase preview if this is the last day of the current phase
-        last_group = data['groups'][-1]  # Get last group in this functional phase
-        if last_group.next_functional_phase and last_group.functional_phase_end <= plan.end_date:
-            next_phase_start = (last_group.functional_phase_end + timedelta(days=1)).strftime('%A, %b %d')
+        # Find the group with the soonest transition
+        min_days_until_transition = float('inf')
+        transitioning_group = None
+        
+        for group in data['groups']:
+            days_until = (group.functional_phase_end - datetime.now().date()).days
+            if days_until < min_days_until_transition:
+                min_days_until_transition = days_until
+                transitioning_group = group
+        
+        if not transitioning_group:
+            transitioning_group = data['groups'][-1]  # Fallback to last group
+        
+        days_until_transition = min_days_until_transition
+        
+        # Log next phase display conditions
+        logger.info("Next phase display check", extra={
+            "current_phase": functional_phase.value,
+            "has_next_phase": bool(transitioning_group.next_functional_phase),
+            "has_next_phase_recs": bool(transitioning_group.next_phase_recommendations),
+            "days_until_transition": days_until_transition,
+            "next_phase": transitioning_group.next_functional_phase.value if transitioning_group.next_functional_phase else None,
+            "transition_group_end": transitioning_group.functional_phase_end.isoformat(),
+            "should_show": bool(transitioning_group.next_functional_phase 
+                              and transitioning_group.next_phase_recommendations 
+                              and (days_until_transition <= 3 or days_until_transition < 0))
+        })
+        
+        # Show next phase if we're within 3 days of transition or have passed the end
+        if (transitioning_group.next_functional_phase 
+            and transitioning_group.next_phase_recommendations 
+            and (days_until_transition <= 3 or days_until_transition < 0)):
+            logger.info("Next phase will be shown", extra={
+                "current_phase": functional_phase.value,
+                "next_phase": transitioning_group.next_functional_phase.value,
+                "days_until_transition": days_until_transition,
+                "today": datetime.now().date().isoformat(),
+                "phase_end": transitioning_group.functional_phase_end.isoformat()
+            })
+            next_phase_start = (transitioning_group.functional_phase_end + timedelta(days=1)).strftime('%A, %b %d')
             formatted.extend([
                 "",
-                f"Next Phase: {last_group.next_functional_phase.value.title()} {get_phase_emoji(last_group.next_functional_phase)} (starting {next_phase_start})",
-                f"⏱️ Fasting: {last_group.next_phase_recommendations.fasting_protocol}",
+                f"Next Phase: {transitioning_group.next_functional_phase.value.title()} {get_phase_emoji(transitioning_group.next_functional_phase)} (starting {next_phase_start})",
+                f"⏱️ Fasting: {transitioning_group.next_phase_recommendations.fasting_protocol}",
                 "🥗 Key Foods:",
-                *[f"  - {food}" for food in last_group.next_phase_recommendations.foods]
+                *[f"  - {food}" for food in transitioning_group.next_phase_recommendations.foods]
             ])
+            
+            logger.info("Next phase details", extra={
+                "current_phase": functional_phase.value,
+                "next_phase": transitioning_group.next_functional_phase.value,
+                "days_until_transition": days_until_transition,
+                "transition_date": next_phase_start
+            })
         
         # Add supplements if available (shared at functional phase level)
         if data['recommendations'].supplements:

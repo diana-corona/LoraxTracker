@@ -207,10 +207,16 @@ class RecipeService:
             'snack': []
         }
 
-        # First pass: Index all fresh recipes by meal type
+        # First pass: Load and cache all fresh recipes
         for recipe_file in fresh_recipes:
             recipe = load_recipe(recipe_file)
             if recipe:
+                recipe_id = recipe_file.stem
+                # Always store in both caches
+                self._recipes[recipe_id] = recipe
+                self._phase_recipes[phase][recipe_id] = recipe
+                
+                # Index by meal type
                 for meal_type in meal_type_counts.keys():
                     if meal_type in recipe.tags:
                         meal_type_fresh_recipes[meal_type].append((recipe_file, recipe))
@@ -232,8 +238,6 @@ class RecipeService:
                 if meal_type_counts[meal_type] >= 2:
                     break
                     
-                self._recipes[recipe_id] = recipe
-                self._phase_recipes[phase][recipe_id] = recipe
                 meal_type_counts[meal_type] += 1
                 logger.info(
                     f"Loaded fresh {meal_type} recipe: {recipe.title}",
