@@ -46,6 +46,7 @@ from src.utils.dynamo import create_pk
 from src.models.event import CycleEvent
 from src.services.weekly_plan import generate_weekly_plan, format_weekly_plan
 from src.services.cycle import analyze_cycle_phase
+from src.services.week_analysis import calculate_week_analysis, format_week_analysis
 from src.utils.clients import get_telegram, get_dynamo, get_clients
 from src.utils.auth import Authorization
 from src.utils.logging import logger
@@ -214,26 +215,38 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
             }
         )
         
-        # Send plan
-        telegram.send_message(
-            chat_id=chat_id,
-            text="\n".join(formatted_plan)
-        )
-        
-        logger.info("Weekly plan generated successfully", extra={
-            "user_id": user_id,
-            "chat_id": chat_id,
-            "plan_start": weekly_plan.start_date.isoformat(),
-            "plan_end": weekly_plan.end_date.isoformat()
-        })
-
-        # Clear any previous recipe selections
-        RecipeSelectionStorage.clear_selection(user_id)
-        
         try:
+            # Calculate week analysis
+            week_analysis = calculate_week_analysis(weekly_plan.phase_groups)
+            analysis_text = format_week_analysis(week_analysis)
+            
+            # Combine plan and analysis
+            full_message = formatted_plan + [""] + analysis_text
+            
+            # Send combined message
+            telegram.send_message(
+                chat_id=chat_id,
+                text="\n".join(full_message)
+            )
+            
+            logger.info("Weekly plan generated successfully", extra={
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "plan_start": weekly_plan.start_date.isoformat(),
+                "plan_end": weekly_plan.end_date.isoformat()
+            })
+
+            # Clear any previous recipe selections
+            RecipeSelectionStorage.clear_selection(user_id)
+
             # Get user's current phase
             current_phase = analyze_cycle_phase(cycle_events)
             phase_type = current_phase.functional_phase.value
+
+            # If week has multiple phases, enable multi-phase selection
+            has_multiple_phases = len(week_analysis.phase_distribution) > 1
+            if has_multiple_phases:
+                RecipeSelectionStorage.set_multi_phase_mode(user_id)
             
             # Load and select phase-specific recipes for meal planning with rotation
             recipe_service = RecipeService()
@@ -249,7 +262,12 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
                     phase=phase_type
                 )
             
-            keyboard = create_recipe_selection_keyboard(breakfast_recipes, 'breakfast')
+            keyboard = create_recipe_selection_keyboard(
+                breakfast_recipes, 
+                'breakfast',
+                show_multi_option=has_multiple_phases,
+                week_analysis=week_analysis.phase_distribution if has_multiple_phases else None
+            )
 
             # Send recipe selection message
             telegram.send_message(
@@ -432,12 +450,65 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
     telegram = get_telegram()
 
     try:
-        if not callback_data.startswith('recipe_'):
+        if callback_data.startswith('multi_select_'):
+            # Handle multi-phase selection mode toggle
+            meal_type = callback_data.split('_')[2]
+            RecipeSelectionStorage.set_multi_phase_mode(user_id)
+            
+            # Get recipes for all phases
+            recipe_service = RecipeService()
+            recipes_by_phase = {}
+            
+            for phase in ['power', 'nurture', 'manifestation']:
+                recipe_service.load_recipes_for_meal_planning(phase=phase)
+                phase_recipes = recipe_service.get_recipes_by_meal_type(meal_type, phase=phase, limit=2)
+                if phase_recipes:
+                    recipes_by_phase[phase] = phase_recipes
+                    
+                    # Save to history
+                    for recipe in phase_recipes:
+                        recipe_service.save_recipe_history(
+                            user_id=user_id,
+                            recipe_id=recipe['id'],
+                            meal_type=meal_type,
+                            phase=phase
+                        )
+            
+            all_recipes = []
+            for phase, recipes in recipes_by_phase.items():
+                for recipe in recipes:
+                    recipe['phase'] = phase
+                    all_recipes.append(recipe)
+            
+            keyboard = create_recipe_selection_keyboard(
+                all_recipes, 
+                meal_type,
+                show_multi_option=True
+            )
+            
+            telegram.send_message(
+                chat_id=chat_id,
+                text=f"{MEAL_EMOJIS[meal_type]} Select {meal_type} recipes for each phase:",
+                reply_markup=keyboard
+            )
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"ok": True}),
+                "isBase64Encoded": False
+            }
+            
+        elif not callback_data.startswith('recipe_'):
             raise RecipeSelectionError("Invalid callback data format")
 
         # Update selection storage
         try:
-            RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id)
+            # Parse phase from callback if present
+            phase = None
+            if '_' in recipe_id:
+                recipe_id, phase = recipe_id.rsplit('_', 1)
+            
+            RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id, phase)
             selection = RecipeSelectionStorage.get_selection(user_id)
         except Exception as e:
             raise RecipeSelectionError(f"Failed to update recipe selection: {str(e)}")
@@ -498,10 +569,13 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         else:
             # Get selected recipes (excluding skipped meals)
             selections = selection.to_dict()
-            selected_recipe_ids = [
-                recipe_id for recipe_id in selections.values() 
-                if recipe_id != 'skip'
-            ]
+            selected_recipe_ids = []
+            for meal_type, recipe_list in selections.items():
+                if meal_type != 'mode':  # Skip the mode field
+                    for recipe in recipe_list:
+                        recipe_id = recipe.get('recipe_id')
+                        if recipe_id and recipe_id != 'skip':
+                            selected_recipe_ids.append(recipe_id)
             
             if not selected_recipe_ids:
                 # All meals were skipped
@@ -547,11 +621,15 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     selections = selection.to_dict()
                     
                     for meal_type, emoji in zip(meal_types, [MEAL_EMOJIS[m] for m in meal_types]):
-                        recipe_id = selections.get(meal_type)
-                        if recipe_id and recipe_id != 'skip':
-                            recipe = recipe_service.get_recipe_by_id(recipe_id)
-                            if recipe and recipe.url:
-                                recipe_links_msg.append(f"{emoji} {meal_type.title()}: {recipe.title}\n{recipe.url}")
+                        recipe_list = selections.get(meal_type, [])
+                        for recipe_selection in recipe_list:
+                            recipe_id = recipe_selection.get('recipe_id')
+                            phase = recipe_selection.get('phase')
+                            if recipe_id and recipe_id != 'skip':
+                                recipe = recipe_service.get_recipe_by_id(recipe_id)
+                                if recipe and recipe.url:
+                                    phase_emoji = "⚡" if phase == "power" else "🌱" if phase == "nurture" else "✨"
+                                    recipe_links_msg.append(f"{emoji} {meal_type.title()} {phase_emoji}: {recipe.title}\n{recipe.url}")
                     
                     recipe_links_msg.append("\nHappy cooking! 👩‍🍳")
                     
