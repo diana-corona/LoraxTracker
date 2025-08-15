@@ -66,7 +66,8 @@ def create_recipe_selection_keyboard(
     recipes: List[Dict[str, Any]],
     meal_type: str,
     show_multi_option: bool = False,
-    week_analysis: Optional[Dict[str, PhaseDistribution]] = None
+    week_analysis: Optional[Dict[str, PhaseDistribution]] = None,
+    default_phase: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create inline keyboard for recipe selection with phase labels.
@@ -76,6 +77,7 @@ def create_recipe_selection_keyboard(
         meal_type: Type of meal (breakfast, lunch, dinner, snack)
         show_multi_option: Whether to show option for selecting multiple phase-specific recipes
         week_analysis: Optional week analysis to show phase distribution
+        default_phase: Default phase to append to callback data for multi-phase mode
         
     Returns:
         InlineKeyboardMarkup with recipe options and skip option
@@ -120,9 +122,12 @@ def create_recipe_selection_keyboard(
             )])
         
         for recipe in phase_recipes:
+            # Always add phase when in multi-phase mode, otherwise only if explicitly set
             callback_data = f"recipe_{meal_type}_{recipe['id']}"
             if show_multi_option:
                 callback_data = f"recipe_{meal_type}_{recipe['id']}_{phase}"
+            elif default_phase:
+                callback_data = f"recipe_{meal_type}_{recipe['id']}_{default_phase}"
             
             button_text = f"{recipe['title']} ({recipe['prep_time']} min)"
             if len(recipes_by_phase) == 1:  # Add phase emoji if not grouped
@@ -134,6 +139,9 @@ def create_recipe_selection_keyboard(
     if buttons:  # Add spacer before skip button if we have other buttons
         buttons.append([])
     skip_callback_data = f"recipe_{meal_type}_skip"
+    # Add phase to skip callback in multi-phase mode
+    if show_multi_option:
+        skip_callback_data = f"recipe_{meal_type}_skip_{default_phase or 'skip'}"
     skip_button = [InlineKeyboardButton("Skip this meal 🚫", callback_data=skip_callback_data)]
     buttons.append(skip_button)
     

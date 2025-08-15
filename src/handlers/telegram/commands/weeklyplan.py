@@ -28,7 +28,7 @@ Components:
 import os
 from datetime import datetime
 import json
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from src.handlers.telegram.exceptions import (
@@ -39,7 +39,8 @@ from src.handlers.telegram.exceptions import (
 )
 from src.utils.telegram.keyboards import create_recipe_selection_keyboard
 from src.services.recipe import RecipeService
-from src.services.recipe_selection_storage import RecipeSelectionStorage
+from src.services.recipe_selection_storage import RecipeSelectionStorage, SelectionMode
+from src.services.weekly_plan_cache import WeeklyPlanCache, WeeklyPlanCacheError
 from src.services.shopping_list import ShoppingListService
 
 from src.utils.dynamo import create_pk
@@ -110,6 +111,44 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
 
     # Get all clients with auth
     dynamo, telegram, auth = get_all_clients()
+    
+    # Check cache first
+    try:
+        cache = WeeklyPlanCache()
+        cached_plan = cache.get_cached_plan(user_id)
+        if cached_plan:
+            # Send cached plan, shopping list, and recipe links
+            telegram.send_message(
+                chat_id=chat_id,
+                text=cached_plan['plan_text']
+            )
+            telegram.send_message(
+                chat_id=chat_id,
+                text=cached_plan['shopping_list']
+            )
+            telegram.send_message(
+                chat_id=chat_id,
+                text=cached_plan['recipe_links']
+            )
+            logger.info("Sent cached weekly plan", extra={
+                "user_id": user_id,
+                "cache_hit": True
+            })
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({
+                    "ok": True,
+                    "result": {"message": "Cached weekly plan sent"}
+                }),
+                "isBase64Encoded": False
+            }
+    except WeeklyPlanCacheError as e:
+        # Log error but continue with normal plan generation
+        logger.warning("Cache access failed", extra={
+            "user_id": user_id,
+            "error": str(e)
+        })
     
     # Verify user authorization
     try:
@@ -222,12 +261,16 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
             
             # Combine plan and analysis
             full_message = formatted_plan + [""] + analysis_text
+            full_message_text = "\n".join(full_message)
             
             # Send combined message
             telegram.send_message(
                 chat_id=chat_id,
-                text="\n".join(full_message)
+                text=full_message_text
             )
+            
+            # Store message text for later caching
+            RecipeSelectionStorage.store_weekly_plan_text(user_id, full_message_text)
             
             logger.info("Weekly plan generated successfully", extra={
                 "user_id": user_id,
@@ -262,11 +305,13 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
                     phase=phase_type
                 )
             
+            # Add phase to recipe keyboard if in multi-phase mode
             keyboard = create_recipe_selection_keyboard(
                 breakfast_recipes, 
                 'breakfast',
                 show_multi_option=has_multiple_phases,
-                week_analysis=week_analysis.phase_distribution if has_multiple_phases else None
+                week_analysis=week_analysis.phase_distribution if has_multiple_phases else None,
+                default_phase=phase_type if has_multiple_phases else None
             )
 
             # Send recipe selection message
@@ -508,7 +553,12 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
             if '_' in recipe_id:
                 recipe_id, phase = recipe_id.rsplit('_', 1)
             
-            RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id, phase)
+            # Get selection first to check mode
+            selection = RecipeSelectionStorage.get_selection(user_id)
+            
+            # Only pass phase if in multi-phase mode
+            update_phase = phase if selection.mode == SelectionMode.MULTI_PHASE else None
+            RecipeSelectionStorage.update_selection(user_id, meal_type, recipe_id, update_phase)
             selection = RecipeSelectionStorage.get_selection(user_id)
         except Exception as e:
             raise RecipeSelectionError(f"Failed to update recipe selection: {str(e)}")
@@ -559,7 +609,11 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     phase=phase_type
                 )
                 
-            keyboard = create_recipe_selection_keyboard(next_recipes, next_meal)
+            keyboard = create_recipe_selection_keyboard(
+                next_recipes, 
+                next_meal,
+                default_phase=phase_type if selection.mode == SelectionMode.MULTI_PHASE else None
+            )
             
             telegram.send_message(
                 chat_id=chat_id,
@@ -569,13 +623,64 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
         else:
             # Get selected recipes (excluding skipped meals)
             selections = selection.to_dict()
+            
+            def format_recipe_links_msg() -> Tuple[str, bool]:
+                """Format recipe links message and track if any recipes have URLs."""
+                recipe_links_msg = ["📖 Recipe Links\n"]
+                has_urls = False
+                
+                meal_types = ['breakfast', 'lunch', 'dinner', 'snack']
+                for meal_type, emoji in zip(meal_types, [MEAL_EMOJIS[m] for m in meal_types]):
+                    recipe_list = selections.get(meal_type, [])
+                    if not isinstance(recipe_list, list):
+                        logger.warning(f"Unexpected recipe_list type for {meal_type}", extra={
+                            "user_id": user_id,
+                            "meal_type": meal_type,
+                            "value_type": type(recipe_list).__name__
+                        })
+                        continue
+
+                    # Skip if empty or None
+                    if not recipe_list:
+                        continue
+                        
+                    for recipe_selection in recipe_list:
+                        if not isinstance(recipe_selection, dict):
+                            logger.warning(f"Invalid recipe selection format for {meal_type}", extra={
+                                "user_id": user_id,
+                                "meal_type": meal_type,
+                                "value_type": type(recipe_selection).__name__
+                            })
+                            continue
+                        recipe_id = recipe_selection.get('recipe_id')
+                        phase = recipe_selection.get('phase')
+                        if recipe_id and recipe_id != 'skip':
+                            recipe = recipe_service.get_recipe_by_id(recipe_id)
+                            if recipe and recipe.url:
+                                has_urls = True
+                                phase_emoji = "⚡" if phase == "power" else "🌱" if phase == "nurture" else "✨"
+                                recipe_links_msg.append(f"{emoji} {meal_type.title()} {phase_emoji}: {recipe.title}\n{recipe.url}")
+                
+                recipe_links_msg.append("\nHappy cooking! 👩‍🍳")
+                return "\n\n".join(recipe_links_msg), has_urls
             selected_recipe_ids = []
             for meal_type, recipe_list in selections.items():
-                if meal_type != 'mode':  # Skip the mode field
-                    for recipe in recipe_list:
+                # Skip non-recipe fields
+                if meal_type == 'mode' or not isinstance(recipe_list, list):
+                    continue
+                
+                # Filter valid recipes
+                for recipe in recipe_list:
+                    if isinstance(recipe, dict):
                         recipe_id = recipe.get('recipe_id')
                         if recipe_id and recipe_id != 'skip':
                             selected_recipe_ids.append(recipe_id)
+                    else:
+                        logger.warning(f"Invalid recipe format for {meal_type}", extra={
+                            "user_id": user_id,
+                            "meal_type": meal_type,
+                            "value_type": type(recipe).__name__
+                        })
             
             if not selected_recipe_ids:
                 # All meals were skipped
@@ -584,12 +689,21 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     text="No shopping list generated as all meals were skipped."
                 )
             else:
-                # Generate shopping list and recipe links together
+                    # Generate shopping list and recipe links together
                 selected_recipes = []
                 missing_urls = []
 
-                # First collect recipe information
-                ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
+                try:
+                    # First collect recipe information
+                    ingredients = recipe_service.get_multiple_recipe_ingredients(selected_recipe_ids)
+                except Exception as e:
+                    logger.error("Failed to get recipe ingredients", extra={
+                        "user_id": user_id,
+                        "recipe_ids": selected_recipe_ids,
+                        "error": str(e),
+                        "error_type": e.__class__.__name__
+                    })
+                    raise RecipeNotFoundError("Could not find ingredients for selected recipes")
                 shopping_service = ShoppingListService(recipe_service)
                 shopping_list = shopping_service.generate_list(ingredients)
                 formatted_list = shopping_service.format_list(shopping_list, recipe_service)
@@ -622,7 +736,28 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                     
                     for meal_type, emoji in zip(meal_types, [MEAL_EMOJIS[m] for m in meal_types]):
                         recipe_list = selections.get(meal_type, [])
+                        # Skip non-recipe fields and invalid types
+                        if not isinstance(recipe_list, list):
+                            logger.warning(f"Unexpected recipe_list type while formatting links", extra={
+                                "user_id": user_id,
+                                "meal_type": meal_type,
+                                "value_type": type(recipe_list).__name__
+                            })
+                            continue
+
+                        # Skip empty lists
+                        if not recipe_list:
+                            continue
+                            
                         for recipe_selection in recipe_list:
+                            if not isinstance(recipe_selection, dict):
+                                logger.warning(f"Invalid recipe selection format for {meal_type}", extra={
+                                    "user_id": user_id,
+                                    "meal_type": meal_type,
+                                    "value_type": type(recipe_selection).__name__
+                                })
+                                continue
+                                
                             recipe_id = recipe_selection.get('recipe_id')
                             phase = recipe_selection.get('phase')
                             if recipe_id and recipe_id != 'skip':
@@ -631,13 +766,39 @@ def handle_recipe_callback(event: Dict[str, Any]) -> Dict[str, Any]:
                                     phase_emoji = "⚡" if phase == "power" else "🌱" if phase == "nurture" else "✨"
                                     recipe_links_msg.append(f"{emoji} {meal_type.title()} {phase_emoji}: {recipe.title}\n{recipe.url}")
                     
-                    recipe_links_msg.append("\nHappy cooking! 👩‍🍳")
                     
                     # Send recipe links message
+                    recipe_links_text = "\n\n".join(recipe_links_msg)
                     telegram.send_message(
                         chat_id=chat_id,
-                        text="\n\n".join(recipe_links_msg)
+                        text=recipe_links_text
                     )
+                    
+                    # Cache the complete plan
+                    try:
+                        # Get weekly plan text from selection storage
+                        selection = RecipeSelectionStorage.get_selection(user_id)
+                        weekly_plan_text = selection.weekly_plan_text
+                        if not weekly_plan_text:
+                            raise WeeklyPlanCacheError("Weekly plan text not found in selection storage")
+                            
+                        cache = WeeklyPlanCache()
+                        cache.cache_plan(user_id, {
+                            'plan_text': weekly_plan_text,
+                            'shopping_list': formatted_list,
+                            'recipe_links': recipe_links_text,
+                            'selections': selections
+                        })
+                        logger.info("Cached new weekly plan", extra={
+                            "user_id": user_id,
+                            "recipe_count": len(selected_recipe_ids)
+                        })
+                    except WeeklyPlanCacheError as e:
+                        # Log error but don't fail the command
+                        logger.error("Failed to cache weekly plan", extra={
+                            "user_id": user_id,
+                            "error": str(e)
+                        })
 
                     logger.info("Sent recipe links", extra={
                         "user_id": user_id,

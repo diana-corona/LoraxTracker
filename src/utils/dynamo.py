@@ -162,3 +162,18 @@ def create_recipe_history_sk(recipe_id: str, date_str: str) -> str:
         Sort key in format "RECIPE#{recipe_id}#{date_str}"
     """
     return f"RECIPE#{recipe_id}#{date_str}"
+
+def create_weekly_plan_sk(week_start_date: str) -> str:
+    """
+    Create sort key for weekly plan cache entries.
+    
+    Used to store cached weekly meal plans to avoid regenerating plans
+    multiple times within the same week.
+
+    Args:
+        week_start_date: ISO format date string of week start (always Monday)
+
+    Returns:
+        Sort key in format "WEEKLY_PLAN#{week_start_date}"
+    """
+    return f"WEEKLY_PLAN#{week_start_date}"

@@ -24,7 +24,8 @@ class RecipeSelection:
     dinner: List[PhaseRecipeSelection]
     snack: List[PhaseRecipeSelection]
     mode: SelectionMode
-
+    weekly_plan_text: Optional[str] = None  # Store weekly plan text
+    
     def __init__(self, mode: SelectionMode = SelectionMode.SINGLE):
         """Initialize with empty selections."""
         self.breakfast = []
@@ -32,6 +33,7 @@ class RecipeSelection:
         self.dinner = []
         self.snack = []
         self.mode = mode
+        self.weekly_plan_text = None
 
     def is_complete(self) -> bool:
         """
@@ -66,7 +68,8 @@ class RecipeSelection:
                 {'recipe_id': s.recipe_id, 'phase': s.phase}
                 for s in self.snack if s.recipe_id
             ],
-            'mode': self.mode.value
+            'mode': self.mode.value,
+            'weekly_plan_text': self.weekly_plan_text
         }
         
     def get_selected_recipes(self) -> List[str]:
@@ -89,9 +92,10 @@ class RecipeSelection:
         Args:
             meal_type: Type of meal (breakfast, lunch, dinner, snack)
             recipe_id: ID of selected recipe
-            phase: Phase this recipe is for (required for multi-phase mode)
+            phase: Phase this recipe is for (required for multi-phase mode non-skip selections)
         """
-        if self.mode == SelectionMode.MULTI_PHASE and not phase:
+        # Skip selections don't require phase even in multi-phase mode
+        if self.mode == SelectionMode.MULTI_PHASE and not phase and recipe_id != 'skip':
             raise ValueError("Phase is required for multi-phase selections")
             
         selection = PhaseRecipeSelection(recipe_id=recipe_id, phase=phase)
@@ -143,6 +147,18 @@ class RecipeSelectionStorage:
             cls._selections[user_id].mode = SelectionMode.MULTI_PHASE
         else:
             cls._selections[user_id] = RecipeSelection(mode=SelectionMode.MULTI_PHASE)
+    
+    @classmethod
+    def store_weekly_plan_text(cls, user_id: str, text: str) -> None:
+        """
+        Store weekly plan text for later use in caching.
+        
+        Args:
+            user_id: User ID to store text for
+            text: Weekly plan text to store
+        """
+        selection = cls.get_selection(user_id)
+        selection.weekly_plan_text = text
     
     @classmethod
     def clear_selection(cls, user_id: str) -> None:
