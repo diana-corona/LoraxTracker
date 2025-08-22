@@ -26,7 +26,7 @@ from src.services.utils import calculate_cycle_day
 from src.services.cycle import calculate_next_cycle, analyze_cycle_phase
 from src.services.phase import get_phase_details, predict_next_phase
 from src.services.recipe import RecipeService
-from src.models.recipe import MealRecommendation
+from src.models.recipe import Recipe, MealRecommendation
 from src.services.recipe_selection import RecipeSelectionService, MealSelection
 
 
@@ -42,7 +42,7 @@ def get_phase_emoji(phase: FunctionalPhaseType) -> str:
 def create_phase_recommendations(
     phase_details: Dict,
     phase_type: FunctionalPhaseType,
-    phase_groups: List[Dict],
+    phase_groups: Optional[List[Dict]] = None,
     user_id: Optional[str] = None
 ) -> PhaseRecommendations:
     """
@@ -60,7 +60,15 @@ def create_phase_recommendations(
     try:
         # Initialize recipe service and load recipes considering multiple phases
         recipe_service = RecipeService()
-        all_phase_recipes = recipe_service.load_recipes_for_multi_phase_week(phase_groups, user_id)
+        # Convert phase_groups to expected format if provided
+        formatted_groups = None
+        if phase_groups:
+            formatted_groups = [{
+                'functional_phase': group.functional_phase,
+                'start_date': group.start_date,
+                'end_date': group.end_date
+            } for group in phase_groups]
+        all_phase_recipes = recipe_service.load_recipes_for_multi_phase_week(formatted_groups, user_id)
         
         # Get recipe recommendations for the current phase
         phase = phase_type.value.lower()
@@ -71,20 +79,40 @@ def create_phase_recommendations(
         
         # Get recipe recommendations for each meal type
         for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
-            recipes = phase_recipes.get(meal_type, [])
-            if recipes:
+            recipes_data = phase_recipes.get(meal_type, [])
+            if recipes_data:
+                # Convert recipe data to Recipe objects
+                recipes = []
+                total_prep_time = 0
+                for r in recipes_data:
+                    recipe = Recipe(
+                        title=r['title'],
+                        phase=phase,
+                        prep_time=r.get('prep_time', 0),
+                        tags=[meal_type] if meal_type else [],
+                        ingredients=[],  # Will be populated when needed
+                        instructions=[],
+                        notes=None,
+                        url=r.get('url'),
+                        file_path=r['file_path']
+                    )
+                    recipes.append(recipe)
+                    total_prep_time += recipe.prep_time
+
                 # Keep track of first recipe's ID for ingredients
-                if recipes[0]['id'] not in recipe_ids:
-                    recipe_ids.append(recipes[0]['id'])
+                recipe_id = recipes[0].file_path.split("/")[-1].split(".")[0]
+                if recipe_id not in recipe_ids:
+                    recipe_ids.append(recipe_id)
                     
-                recipe_recs.append({
-                    'meal_type': meal_type,
-                    'recipes': recipes
-                })
+                recipe_recs.append(MealRecommendation(
+                    meal_type=meal_type,
+                    recipes=recipes,
+                    prep_time_total=total_prep_time
+                ))
         
         # Format recipe suggestions and generate shopping list
-        recipe_suggestions = format_recipe_suggestions(recipe_recs)
-        meal_plan_preview = create_meal_plan_preview(recipe_recs)
+        recipe_suggestions = format_recipe_suggestions(recipe_recs) if recipe_recs else []
+        meal_plan_preview = create_meal_plan_preview(recipe_recs) if recipe_recs else []
         
         # Get ingredients for all unique recipes
         ingredients = recipe_service.get_multiple_recipe_ingredients(recipe_ids)
@@ -119,12 +147,12 @@ def create_phase_recommendations(
             supplements=phase_details.get("supplement_recommendations")
         )
 
-def format_recipe_suggestions(meals: List[Dict]) -> List[Dict[str, Any]]:
+def format_recipe_suggestions(meals: List[MealRecommendation]) -> List[Dict[str, Any]]:
     """
-    Convert dictionary of meal recommendations to display format.
+    Convert MealRecommendation objects to display format.
     
     Args:
-        meals: List of meal recommendation dictionaries
+        meals: List of MealRecommendation objects
         
     Returns:
         List of formatted recipe suggestions using markdown links
@@ -132,45 +160,41 @@ def format_recipe_suggestions(meals: List[Dict]) -> List[Dict[str, Any]]:
     suggestions = []
     for meal in meals:
         meal_data = {
-            "meal_type": meal['meal_type'],
+            "meal_type": meal.meal_type,
             "recipes": [{
-                "title": recipe['title'],
-                "prep_time": recipe.get('prep_time', 0),
-                "id": recipe['id'],
-                "formatted_text": f"[{recipe['title']}](/recipes/{meal['meal_type']}/{recipe['id']})"
-            } for recipe in meal['recipes']],
-            "total_prep_time": sum(r.get('prep_time', 0) for r in meal['recipes'])
+                "title": recipe.title,
+                "prep_time": recipe.prep_time,
+                "tags": recipe.tags,
+                "url": recipe.url,
+                "id": recipe.file_path.split("/")[-1].split(".")[0],  # Extract ID from file path
+            } for recipe in meal.recipes],
+            "total_prep_time": meal.prep_time_total
         }
         suggestions.append(meal_data)
     
     return suggestions
 
-def create_meal_plan_preview(meals: List[Dict]) -> List[str]:
+def create_meal_plan_preview(meals: List[MealRecommendation]) -> List[str]:
     """
     Generate human-readable meal plan preview strings.
     
     Args:
-        meals: List of meal recommendation dictionaries
+        meals: List of MealRecommendation objects
         
     Returns:
         List of formatted meal plan strings with clickable recipe links
     """
     preview = []
     for meal in meals:
-        emoji = MEAL_ICONS.get(meal['meal_type'].lower(), "🍴")
+        emoji = MEAL_ICONS.get(meal.meal_type.lower(), "🍴")
         
-        if len(meal['recipes']) == 1:
-            recipe = meal['recipes'][0]
-            preview.append(
-                f"{emoji} {meal['meal_type'].title()}: [{recipe['title']}](/recipes/{meal['meal_type']}/{recipe['id']}) "
-                f"({recipe.get('prep_time', 0)} min)"
-            )
+        if len(meal.recipes) == 1:
+            recipe = meal.recipes[0]
+            preview.append(f"{emoji} {meal.meal_type.title()}: {recipe.title} ({recipe.prep_time} min)")
         else:
             # Multiple recipes for this meal type
-            recipe_texts = []
-            for r in meal['recipes']:
-                recipe_texts.append(f"[{r['title']}](/recipes/{meal['meal_type']}/{r['id']}) ({r.get('prep_time', 0)} min)")
-            preview.append(f"{emoji} {meal['meal_type'].title()}: {' or '.join(recipe_texts)}")
+            recipe_texts = [f"{r.title} ({r.prep_time} min)" for r in meal.recipes]
+            preview.append(f"{emoji} {meal.meal_type.title()}: {' or '.join(recipe_texts)}")
     
     return preview
 
@@ -342,7 +366,7 @@ def generate_weekly_plan(
     events: List[CycleEvent], 
     start_date: Optional[date] = None,
     user_id: Optional[str] = None
-) -> Tuple[WeeklyPlan, List[str]]:
+) -> WeeklyPlan:
     """
     Generate a weekly plan based on cycle events.
     
@@ -351,9 +375,7 @@ def generate_weekly_plan(
         start_date: Optional start date, defaults to tomorrow
         
     Returns:
-        Tuple containing:
-        - WeeklyPlan object containing phase predictions and recommendations
-        - List of formatted strings for display
+        WeeklyPlan object containing phase predictions and recommendations
     """
     if not events:
         raise ValueError("No events provided for plan generation")
@@ -394,14 +416,11 @@ def generate_weekly_plan(
         "has_transitions": any(pg.has_phase_transition for pg in phase_groups)
     })
     
-    # Format the plan using the latest events context
-    formatted_plan = format_weekly_plan(enhanced_plan, events, user_id)
-    
-    return enhanced_plan, formatted_plan
+    return enhanced_plan
 
 def format_weekly_plan(
     plan: WeeklyPlan, 
-    events: List[CycleEvent],
+    events: Optional[List[CycleEvent]] = None,
     user_id: Optional[str] = None
 ) -> List[str]:
     """
@@ -450,8 +469,10 @@ def format_weekly_plan(
         # Get first group for this functional phase to show phase-wide info
         first_group = data['groups'][0]
         # Get phase details from the Phase object to match /phase command
-        current_phase = analyze_cycle_phase(events)
-        days_remaining = current_phase.functional_phase_duration
+        days_remaining = first_group.functional_phase_duration
+        if events:
+            current_phase = analyze_cycle_phase(events)
+            days_remaining = current_phase.functional_phase_duration
         
         # Log phase transitions for troubleshooting
         logger.info("Phase transition details", extra={
@@ -505,13 +526,15 @@ def format_weekly_plan(
         })
         
         # Use cycle day to determine if this is the second Power phase
-        cycle_day = calculate_cycle_day(events)
-        is_second_power = (
-            functional_phase == FunctionalPhaseType.POWER and
-            any(start <= cycle_day <= end 
-                for start, end, p in FUNCTIONAL_PHASE_MAPPING 
-                if start >= 16 and p == FunctionalPhaseType.POWER)
-        )
+        is_second_power = first_group.is_power_phase_second_occurrence
+        if events:
+            cycle_day = calculate_cycle_day(events)
+            is_second_power = (
+                functional_phase == FunctionalPhaseType.POWER and
+                any(start <= cycle_day <= end 
+                    for start, end, p in FUNCTIONAL_PHASE_MAPPING 
+                    if start >= 16 and p == FunctionalPhaseType.POWER)
+            )
 
         if is_second_power:
             # Override next phase to Nurture

@@ -1,8 +1,9 @@
 """
 Unit tests for recipe service.
 """
+import os
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, mock_open
 
 from src.services.recipe import RecipeService
 from src.models.recipe import Recipe, MealRecommendation, RecipeRecommendations
@@ -40,8 +41,9 @@ class TestRecipeService:
 
     @patch('os.path.exists')
     @patch('os.listdir')
-    @patch.object(RecipeService, 'parser')
-    def test_load_recipes_by_phase_success(self, mock_parser, mock_listdir, mock_exists):
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('src.utils.recipe_parser.RecipeMarkdownParser')
+    def test_load_recipes_by_phase_success(self, MockParser, mock_file, mock_listdir, mock_exists):
         """Test successful recipe loading by phase."""
         # Setup mocks
         mock_exists.return_value = True
@@ -51,8 +53,12 @@ class TestRecipeService:
         recipe1 = self.create_sample_recipe("Recipe 1", "power")
         recipe2 = self.create_sample_recipe("Recipe 2", "power")
         
-        mock_parser.parse_recipe_file.side_effect = [recipe1, recipe2, None]
+        # Setup mock parser
+        mock_parser = MockParser.return_value
+        mock_parser.parse_recipe_file = Mock(side_effect=[recipe1, recipe2])
         
+        # Replace the service's parser instance with our mock
+        self.service.parser = mock_parser
         # Test
         recipes = self.service.load_recipes_by_phase(FunctionalPhaseType.POWER)
         
@@ -61,10 +67,16 @@ class TestRecipeService:
         assert recipes[0].title == "Recipe 1"
         assert recipes[1].title == "Recipe 2"
         
+        # Verify the mock was called with correct paths
+        mock_parser.parse_recipe_file.assert_any_call("recipes/power/recipe1.md")
+        mock_parser.parse_recipe_file.assert_any_call("recipes/power/recipe2.md")
+        assert mock_parser.parse_recipe_file.call_count == 2
+        
         # Verify caching
+        mock_parser.parse_recipe_file.reset_mock()
         cached_recipes = self.service.load_recipes_by_phase(FunctionalPhaseType.POWER)
         assert cached_recipes == recipes
-        mock_parser.parse_recipe_file.assert_called_with('recipes/power/recipe2.md')
+        assert mock_parser.parse_recipe_file.call_count == 0  # Should use cache
 
     @patch('os.path.exists')
     def test_load_recipes_missing_directory(self, mock_exists):
@@ -133,31 +145,21 @@ class TestRecipeService:
                 phase="power",
                 prep_time=15,
                 tags=["dinner"],
-                ingredients=["1 cup olive oil", "2 lbs salmon", "1 bunch kale"],
+                ingredients=["2 lbs salmon", "1 bunch kale", "1 avocado", "1 tbsp hot sauce"],
                 instructions=["Step 1"],
                 notes=None,
                 url=None,
                 file_path="/test1.md"
-            ),
-            Recipe(
-                title="Recipe 2", 
-                phase="power",
-                prep_time=20,
-                tags=["lunch"],
-                ingredients=["2 tbsp olive oil", "1 avocado", "salt and pepper"],
-                instructions=["Step 1"],
-                notes=None,
-                url=None,
-                file_path="/test2.md"
             )
         ]
         
         shopping_list = self.service.generate_shopping_preview(recipes)
         
         assert len(shopping_list) > 0
-        # Should extract main ingredients (olive oil appears in both recipes)
-        ingredient_str = " ".join(shopping_list).lower()
-        assert "olive oil" in ingredient_str or "oil" in ingredient_str
+        assert 'hot sauce' in shopping_list, f"Expected hot sauce in {shopping_list}"
+        assert 'salmon' in shopping_list, f"Expected salmon in {shopping_list}"
+        assert 'bunch kale' in shopping_list, f"Expected bunch kale in {shopping_list}"
+        assert 'avocado' in shopping_list, f"Expected avocado in {shopping_list}"
 
     def test_generate_shopping_preview_empty_recipes(self):
         """Test shopping list generation with empty recipe list."""
@@ -273,7 +275,11 @@ class TestRecipeService:
         for ingredient_line, expected in test_cases:
             result = self.service._extract_main_ingredient(ingredient_line)
             if expected:
-                assert expected.lower() in result.lower(), f"Expected '{expected}' in '{result}' for input '{ingredient_line}'"
+                # For salt and pepper, just check that result matches exactly
+                if expected == "salt pepper":
+                    assert result == "salt pepper", f"Expected exact match 'salt pepper', got '{result}' for '{ingredient_line}'"
+                else:
+                    assert expected.lower() in result.lower(), f"Expected '{expected}' in '{result}' for input '{ingredient_line}'"
 
     def test_caching_behavior(self):
         """Test that recipe caching works correctly."""

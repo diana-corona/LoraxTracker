@@ -19,7 +19,7 @@ from src.services.utils import get_menstruation_events
 
 def get_period_history(
     events: List[CycleEvent], 
-    months: Optional[int] = None,
+    months: Optional[int] = 6,  # Default to 6 months
     periods: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
@@ -52,18 +52,22 @@ def get_period_history(
     result_periods = []
     current_period = None
     
-    # Calculate cutoff date if using time-based query
-    cutoff_date = None
-    if months is not None:
-        cutoff_date = date.today() - timedelta(days=30 * months)
+    # Calculate cutoff date
+    cutoff_date = date.today() - timedelta(days=30 * months) if months else None
+    
+    # Keep track of processed dates to avoid duplicates
+    processed_dates = set()
     
     for event in menstruation_events:
-        # Check time-based cutoff if specified
-        if cutoff_date and event.date < cutoff_date:
-            break
+        # Skip if this date was already processed
+        if event.date in processed_dates:
+            continue
             
         # Since events are in reverse order (newest first), 
         # we need to handle the dates differently
+        if cutoff_date and event.date < cutoff_date:
+            break
+            
         if not current_period:
             # Start new period
             current_period = {
@@ -71,17 +75,21 @@ def get_period_history(
                 'end_date': event.date,
                 'duration': 1
             }
+            processed_dates.add(event.date)
         elif abs((event.date - current_period['start_date']).days) == 1:
             # Extend current period (could be earlier or later day)
-            current_period['start_date'] = min(current_period['start_date'], event.date)
-            current_period['end_date'] = max(current_period['end_date'], event.date)
-            current_period['duration'] += 1
+            if event.date not in processed_dates:
+                current_period['start_date'] = min(current_period['start_date'], event.date)
+                current_period['end_date'] = max(current_period['end_date'], event.date)
+                current_period['duration'] += 1
+                processed_dates.add(event.date)
         else:
             # Gap found, start new period
             result_periods.append(current_period)
             
-            # If using count-based query and we have enough periods, stop
-            if periods is not None and len(result_periods) >= periods:
+            # Check count and time limits before starting a new period
+            if (periods is not None and len(result_periods) >= periods) or \
+               (cutoff_date and event.date < cutoff_date):
                 break
                 
             current_period = {

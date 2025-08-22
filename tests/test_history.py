@@ -61,13 +61,13 @@ def test_get_period_history(sample_events):
     
     assert len(history) == 2  # Should find 2 periods within 6 months
     
-    # Most recent period
-    assert history[0]["duration"] == 3
-    assert (history[0]["end_date"] - history[0]["start_date"]).days == 2
+    # Most recent period - 3 days: today-5, today-4, today-3
+    assert history[0]["duration"] == 3  # Three separate dates
+    assert (history[0]["end_date"] - history[0]["start_date"]).days == 2  # Span of 2 days
     
-    # Previous period
-    assert history[1]["duration"] == 2
-    assert (history[1]["end_date"] - history[1]["start_date"]).days == 1
+    # Previous period - 2 days: today-33, today-32
+    assert history[1]["duration"] == 2  # Two separate dates
+    assert (history[1]["end_date"] - history[1]["start_date"]).days == 1  # Span of 1 day
 
 def test_get_period_history_custom_months(sample_events):
     """Test getting history with custom month range."""

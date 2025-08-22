@@ -72,6 +72,16 @@ class TestEnhancedWeeklyPlan:
         # Setup mock recipe service
         mock_service = Mock()
         mock_recipe_service_class.return_value = mock_service
+
+        # Set up mock for load_recipes_for_multi_phase_week
+        mock_service.load_recipes_for_multi_phase_week.return_value = {}
+        
+        # Set up mock for get_multiple_recipe_ingredients
+        mock_service.get_multiple_recipe_ingredients.return_value = type('obj', (object,), {
+            'proteins': ['salmon'],
+            'produce': [],
+            'dairy': []
+        })
         
         # Create sample recipe data
         sample_recipe = self.create_sample_recipe("Air Fryer Salmon", 15, ["dinner"])

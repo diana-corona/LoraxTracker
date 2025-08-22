@@ -22,11 +22,20 @@ class MockRecipeService:
     """Mock recipe service for testing."""
     def is_pantry_item(self, item: str) -> bool:
         return item in ['salt', 'pepper', 'oil']
+        
+    def extract_base_ingredient(self, ingredient: str) -> str:
+        """Extract base ingredient from ingredient description for testing."""
+        # For test purposes, we'll handle just the basic cases used in tests
+        ingredient = ingredient.lower()
+        if 'salt' in ingredient or 'pepper' in ingredient:
+            return 'salt pepper' if 'and' in ingredient else ingredient
+        # Return the ingredient as-is for other test cases
+        return ingredient
 
 @pytest.fixture
-def shopping_service():
+def shopping_service(recipe_service):
     """Create shopping list service instance."""
-    return ShoppingListService()
+    return ShoppingListService(recipe_service)
 
 @pytest.fixture
 def recipe_service():

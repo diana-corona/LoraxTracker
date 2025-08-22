@@ -139,9 +139,9 @@ def create_recipe_selection_keyboard(
     if buttons:  # Add spacer before skip button if we have other buttons
         buttons.append([])
     skip_callback_data = f"recipe_{meal_type}_skip"
-    # Add phase to skip callback in multi-phase mode
-    if show_multi_option:
-        skip_callback_data = f"recipe_{meal_type}_skip_{default_phase or 'skip'}"
+    # Add phase to skip callback in multi-phase mode only if a default_phase is provided
+    if show_multi_option and default_phase:
+        skip_callback_data = f"recipe_{meal_type}_skip_{default_phase}"
     skip_button = [InlineKeyboardButton("Skip this meal 🚫", callback_data=skip_callback_data)]
     buttons.append(skip_button)
     

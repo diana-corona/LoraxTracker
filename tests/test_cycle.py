@@ -211,11 +211,15 @@ def test_prediction_on_last_day():
                 date=start_date + timedelta(days=day),
                 state="menstruation"
             ))
-    
-    # Monkey patch date.today() for the test
-    import src.services.cycle
-    original_today = src.services.cycle.date.today
-    src.services.cycle.date.today = lambda: today
+
+    # Create a mock module with today() function
+    import sys
+    from unittest.mock import Mock
+    import datetime
+    mock_date = Mock(wraps=datetime.date)
+    mock_date.today = lambda: today
+    original_date = sys.modules['src.services.cycle'].date
+    sys.modules['src.services.cycle'].date = mock_date
     
     try:
         next_date, duration, warning = calculate_next_cycle(events)
@@ -226,5 +230,5 @@ def test_prediction_on_last_day():
         assert next_date == date(2025, 7, 28)
         assert duration == 6  # Should match actual period duration
     finally:
-        # Restore original date.today
-        src.services.cycle.date.today = original_today
+        # Restore original date
+        sys.modules['src.services.cycle'].date = original_date

@@ -215,10 +215,13 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
                     "action": "weekly_plan_generation"
                 }
             )
-            raise NoEventsError("No cycle events found. Please register a cycle event first using the /registrar command.")
+            raise NoEventsError("No cycle events found. Please register some events first.")
         
-        # Generate weekly plan and get formatted output
-        weekly_plan, formatted_plan = generate_weekly_plan(cycle_events, user_id=user_id)
+        # Generate weekly plan
+        weekly_plan = generate_weekly_plan(cycle_events, user_id=user_id)
+        
+        # Get formatted output
+        formatted_plan = format_weekly_plan(weekly_plan, cycle_events, user_id)
         
         # Check if next phase should be shown
         next_phase_info = None
@@ -342,9 +345,7 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
         
         return {
             "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
                 "ok": True,
                 "result": {"message": "Weekly plan sent"}
@@ -362,16 +363,7 @@ def handle_weeklyplan_command(user_id: str, chat_id: str, message: Dict[str, Any
             chat_id=chat_id,
             text=f"⚠️ {str(e)}"
         )
-        return {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
-                "ok": False,
-                "error_code": "NO_EVENTS",
-                "description": str(e)
-            }),
-            "isBase64Encoded": False
-        }
+        return None
     except WeeklyPlanError as e:
         logger.error("Weekly plan generation failed", extra={
             "user_id": user_id,

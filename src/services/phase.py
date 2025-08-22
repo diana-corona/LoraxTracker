@@ -54,8 +54,11 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
         target_date = date.today()
 
     cycle_day = calculate_cycle_day(events, target_date)
-    traditional_phase, duration = determine_traditional_phase(cycle_day)
+    traditional_phase, remaining_days = determine_traditional_phase(cycle_day)
     functional_phase = determine_functional_phase(cycle_day)
+    
+    # Get total duration from constants
+    duration = TRADITIONAL_PHASE_DURATIONS[traditional_phase]
     
     # Calculate traditional phase dates
     menstruation_events = get_menstruation_events(events, reverse=True)

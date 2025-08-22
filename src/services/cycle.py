@@ -59,34 +59,40 @@ def calculate_next_cycle(events: List[CycleEvent]) -> Tuple[date, int, Optional[
             return (
                 menstruation_events[0].date + timedelta(days=28),
                 28,
-                "Insufficient data for accurate prediction"
+                "Limited data for prediction, using default cycle length"
             )
         raise ValueError("No menstruation events found for prediction")
-    
+        
     # Get accurate statistics using the statistics service
     stats = calculate_cycle_statistics(events)
     period_ranges = find_period_ranges(events)
     
     if not period_ranges:
         raise ValueError("No valid period ranges found")
-        
+
     # Get the last period's end date
     last_period_end = period_ranges[-1][1]
     avg_days_between = stats["average_days_between"]
-    warning = None
+    warning = "Limited data for prediction, using most recent cycle length" if len(period_ranges) == 2 else None
     
     today = date.today()
     days_since_last_end = (today - last_period_end).days
-    
-    # If today is within a day of the expected next cycle, predict tomorrow
-    if days_since_last_end >= avg_days_between - 1:
-        next_date = today + timedelta(days=1)
+
+    # For limited data (2 periods), use simpler prediction
+    if len(period_ranges) == 2:
+        next_date = last_period_end + timedelta(days=avg_days_between + 1)
+    # Otherwise use more sophisticated prediction
     else:
-        # Otherwise predict based on the last period end date plus average interval
-        next_date = last_period_end + timedelta(days=round(avg_days_between))
+        current_period_start = period_ranges[-1][0]
+        days_in_current_period = (today - current_period_start).days
+        # If we're in the current period and it's the last day
+        if days_in_current_period == stats["average_period_duration"] - 1:
+            next_date = today + timedelta(days=1)
+        else:
+            next_date = last_period_end + timedelta(days=avg_days_between + 1)
     
     # Check for irregularity by comparing recent cycles
-    if len(period_ranges) >= 3:
+    if len(period_ranges) >= 3 and not warning:  # Only check irregularity if no other warnings
         recent_intervals = []
         for i in range(1, len(period_ranges)):
             interval = (period_ranges[i][0] - period_ranges[i-1][1]).days - 1

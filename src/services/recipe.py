@@ -21,7 +21,8 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 from src.utils.recipe_parser import RecipeMarkdownParser
-from src.models.recipe import Recipe, RecipeHistory
+from src.models.recipe import Recipe, RecipeHistory, MealRecommendation, RecipeRecommendations
+from src.models.phase import FunctionalPhaseType
 from src.utils.dynamo import get_dynamo, create_pk, create_recipe_history_sk
 
 @dataclass
@@ -74,6 +75,13 @@ class RecipeService:
         }
     }
 
+    # Phase folder mapping
+    phase_folders = {
+        FunctionalPhaseType.POWER: "power",
+        FunctionalPhaseType.MANIFESTATION: "manifestation",
+        FunctionalPhaseType.NURTURE: "nurture"
+    }
+    
     def __init__(self):
         """Initialize recipe service with parser and DynamoDB client."""
         self.parser = RecipeMarkdownParser()
@@ -83,6 +91,7 @@ class RecipeService:
             'nurture': {},
             'manifestation': {}
         }
+        self._recipe_cache = {}  # Cache for loaded recipes by phase
         self.dynamo = get_dynamo()
 
     def get_recipe_history(self, user_id: str, days: int = 30) -> List[str]:
@@ -356,7 +365,16 @@ class RecipeService:
             'chicken'
             >>> extract_base_ingredient("500g lean ground beef")
             'beef'
+            >>> extract_base_ingredient("Salt and pepper to taste")
+            'salt pepper'
         """
+        # Special cases for common ingredients that need to preserve multiple words
+        ingredient_lower = ingredient.lower()
+        if re.search(r'salt\s+and\s+pepper', ingredient_lower):
+            return 'salt pepper'
+        if re.search(r'olive\s+oil', ingredient_lower):
+            return 'olive oil'
+
         # Normalize proteins first
         protein_mappings = {
             'eggs': [
@@ -378,8 +396,8 @@ class RecipeService:
                 r'bacon',
             ],
             'fish': [
-                r'salmon',
-                r'tuna',
+                r'salmon(\s*fillet)?',
+                r'tuna(\s*steak)?',
                 r'cod',
                 r'tilapia',
                 r'fish\s*\w*',
@@ -390,7 +408,12 @@ class RecipeService:
         cleaned = ingredient.lower()
         for base_protein, patterns in protein_mappings.items():
             for pattern in patterns:
-                if re.search(pattern, cleaned, re.IGNORECASE):
+                match = re.search(pattern, cleaned, re.IGNORECASE)
+                if match:
+                    # For fish-related ingredients, return the full matched phrase
+                    if base_protein == 'fish':
+                        matched_text = match.group(0).strip()
+                        return matched_text if matched_text else base_protein
                     return base_protein
         
         # If not a protein, remove amounts and measurements
@@ -445,6 +468,125 @@ class RecipeService:
         logger.debug(f"Uncategorized ingredient defaulting to pantry: {ingredient}")
         return 'pantry'
 
+    def load_recipes_by_phase(self, phase: FunctionalPhaseType) -> List[Recipe]:
+        """Load recipes for a specific phase."""
+        # Check cache first
+        phase_str = phase.value.lower()
+        if phase_str in self._recipe_cache:
+            return self._recipe_cache[phase_str]
+
+        recipes_path = f"recipes/{self.phase_folders[phase]}"
+        if not os.path.exists(recipes_path):
+            logger.warning(f"Recipe directory not found: {recipes_path}")
+            return []
+
+        recipes = []
+        try:
+            for filename in os.listdir(recipes_path):
+                if filename.endswith('.md'):
+                    recipe_path = f"{recipes_path}/{filename}"
+                    try:
+                        recipe = self.parser.parse_recipe_file(recipe_path)
+                        if recipe is not None:  # Changed from if recipe: to handle empty but valid recipes
+                            recipes.append(recipe)
+                    except Exception as e:
+                        logger.error(f"Error parsing recipe {filename}: {str(e)}")
+                        continue  # Skip to next file on error instead of potentially breaking the loop
+        except OSError as e:
+            logger.error(f"Error accessing recipe directory: {str(e)}")
+            return []
+
+        # Cache the results
+        self._recipe_cache[phase_str] = recipes
+        return recipes
+
+    def balance_meal_types(self, recipes: List[Recipe]) -> List[MealRecommendation]:
+        """Balance recipes across meal types."""
+        meal_types = {"breakfast": [], "lunch": [], "dinner": [], "snack": []}
+        general_recipes = []
+
+        # Sort recipes into meal types
+        for recipe in recipes:
+            assigned = False
+            for meal_type in meal_types.keys():
+                if meal_type in recipe.tags:
+                    meal_types[meal_type].append(recipe)
+                    assigned = True
+                    break
+            if not assigned:
+                general_recipes.append(recipe)
+
+        # Create meal recommendations
+        recommendations = []
+        
+        # Handle specifically tagged recipes
+        for meal_type, type_recipes in meal_types.items():
+            if type_recipes:
+                recommendations.append(MealRecommendation(
+                    meal_type=meal_type,
+                    recipes=type_recipes,
+                    prep_time_total=sum(r.prep_time for r in type_recipes)
+                ))
+
+        # Handle general recipes if any exist
+        if general_recipes:
+            recommendations.append(MealRecommendation(
+                meal_type="general",
+                recipes=general_recipes,
+                prep_time_total=sum(r.prep_time for r in general_recipes)
+            ))
+
+        return recommendations
+
+    def generate_shopping_preview(self, recipes: List[Recipe]) -> List[str]:
+        """Generate a shopping list preview from recipes."""
+        if not recipes:
+            return []
+
+        all_ingredients = set()
+        for recipe in recipes:
+            ingredients = set(self._extract_main_ingredient(i) for i in recipe.ingredients)
+            all_ingredients.update(ingredients)
+
+        # Filter out pantry items
+        shopping_list = [i for i in all_ingredients if not self.is_pantry_item(i)]
+        # Sort ingredients alphabetically and return as plain list
+        return sorted(shopping_list, key=str.lower)
+
+    def _select_diverse_recipes(self, recipes: List[Recipe], max_recipes: int) -> List[Recipe]:
+        """Select a diverse set of recipes based on main ingredients."""
+        if not recipes or max_recipes <= 0:
+            return []
+
+        selected = []
+        main_ingredients_used = set()
+
+        # Sort recipes by prep time to prefer quicker recipes
+        sorted_recipes = sorted(recipes, key=lambda r: r.prep_time)
+
+        for recipe in sorted_recipes:
+            if len(selected) >= max_recipes:
+                break
+
+            # Get main ingredients from this recipe
+            recipe_main_ingredients = set()
+            for ingredient in recipe.ingredients:
+                main = self._extract_main_ingredient(ingredient)
+                if main:
+                    recipe_main_ingredients.add(main)
+
+            # Check if this recipe adds diversity
+            if not recipe_main_ingredients.intersection(main_ingredients_used):
+                selected.append(recipe)
+                main_ingredients_used.update(recipe_main_ingredients)
+
+        return selected
+
+    def _extract_main_ingredient(self, ingredient: str) -> str:
+        """Extract main ingredient from an ingredient line."""
+        # Use existing extract_base_ingredient method
+        return self.extract_base_ingredient(ingredient)
+
     def get_recipe_ingredients(self, recipe_id: str) -> CategorizedIngredients:
         """Get categorized ingredients for a recipe."""
         recipe = self.get_recipe_by_id(recipe_id)
@@ -480,6 +622,26 @@ class RecipeService:
             }
         )
         return ingredients
+
+    def get_recipe_recommendations(self, phase: FunctionalPhaseType) -> RecipeRecommendations:
+        """Get recipe recommendations for a phase."""
+        try:
+            recipes = self.load_recipes_by_phase(phase)
+            if not recipes:
+                return RecipeRecommendations(phase=phase, meals=[], shopping_list_preview=[])
+
+            meals = self.balance_meal_types(recipes)
+            all_recipes = [r for meal in meals for r in meal.recipes]
+            shopping_preview = self.generate_shopping_preview(all_recipes)
+
+            return RecipeRecommendations(
+                phase=phase,
+                meals=meals,
+                shopping_list_preview=shopping_preview
+            )
+        except Exception as e:
+            logger.error(f"Error generating recommendations: {str(e)}")
+            return RecipeRecommendations(phase=phase, meals=[], shopping_list_preview=[])
 
     def get_multiple_recipe_ingredients(self, recipe_ids: List[str]) -> CategorizedIngredients:
         """Get combined categorized ingredients for multiple recipes."""
@@ -527,8 +689,12 @@ class RecipeService:
         return combined
 
     def is_pantry_item(self, ingredient: str) -> bool:
-        """Check if an ingredient is a common pantry item."""
-        return any(item in ingredient.lower() for item in self.PANTRY_ITEMS)
+        """
+        Check if an ingredient is a common pantry item.
+        Requires exact match to avoid false positives with substrings.
+        """
+        ingredient_lower = ingredient.lower().strip()
+        return any(item == ingredient_lower for item in self.PANTRY_ITEMS)
 
     def load_recipes_for_multi_phase_week(
         self,
