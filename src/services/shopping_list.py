@@ -16,7 +16,7 @@ from src.services.recipe import RecipeService
 
 @dataclass
 class ShoppingList:
-    """Model representing a categorized shopping list with ingredient counts."""
+    """Model representing a categorized shopping list."""
     proteins: Dict[str, int] = field(default_factory=dict)
     produce: Dict[str, int] = field(default_factory=dict)
     dairy: Dict[str, int] = field(default_factory=dict)
@@ -45,7 +45,7 @@ class ShoppingListService:
 
     def generate_list(self, ingredients: Any) -> ShoppingList:
         """
-        Generate a shopping list from recipe ingredients with counts.
+        Generate a shopping list from recipe ingredients.
 
         Args:
             ingredients: Recipe ingredients object with categorized items
@@ -57,13 +57,13 @@ class ShoppingListService:
         
         for category in ['proteins', 'produce', 'dairy', 'condiments', 'baking', 'nuts', 'pantry']:
             category_items = getattr(ingredients, category, set())
-            category_dict = getattr(shopping_list, category)
+            category_list = getattr(shopping_list, category)
             
-            # Extract base ingredients and count occurrences
+            # Add base ingredients to list with counts
             for item in category_items:
                 base_ingredient = self.recipe_service.extract_base_ingredient(item)
                 if base_ingredient:  # Skip empty strings
-                    category_dict[base_ingredient] = category_dict.get(base_ingredient, 0) + 1
+                    category_list[base_ingredient] = category_list.get(base_ingredient, 0) + 1
 
         return shopping_list
 
@@ -78,39 +78,26 @@ class ShoppingListService:
         Returns:
             str: Formatted shopping list text with emojis and categories
         """
-        def format_count(count: int) -> str:
-            """Convert count to x1/x2/x3 format."""
-            if count >= 3:
-                return "x3"
-            return f"x{count}"
-
         formatted = ["🛒 Shopping List\n"]
         
-        # Add non-pantry ingredients by category with counts
+        # Add non-pantry ingredients by category
         for category in ['proteins', 'produce', 'dairy', 'condiments', 'baking', 'nuts']:
             items = getattr(shopping_list, category)
             if items:
                 emoji = self.CATEGORY_ICONS.get(category, '•')
                 formatted.extend([
                     f"\n{emoji} {category.title()}:",
-                    *[f"  • {item} {format_count(count)}" 
-                      for item, count in sorted(items.items())]
+                    *[f"  • {item} (x{count})" for item, count in sorted(items.items())]
                 ])
 
         # Add pantry items note if any were used
-        # First consolidate pantry items by their base name
-        consolidated_pantry_items = set()
-        for item in shopping_list.pantry:
-            if recipe_service.is_pantry_item(item):
-                base_item = self.recipe_service.extract_base_ingredient(item)
-                if base_item:  # Skip empty strings
-                    consolidated_pantry_items.add(base_item)
-        
-        if consolidated_pantry_items:
+        # Show pantry items
+        pantry_items = [item for item, count in shopping_list.pantry.items() if recipe_service.is_pantry_item(item)]
+        if pantry_items:
             formatted.extend([
                 "\n🏠 Pantry Items to Check:",
                 "(These basic ingredients are assumed to be in most kitchens)",
-                *[f"  • {item}" for item in sorted(consolidated_pantry_items)]
+                *[f"  • {item}" for item in sorted(pantry_items)]
             ])
 
         return "\n".join(formatted)

@@ -49,20 +49,32 @@ def handle_statistics_command(user_id: str, chat_id: str) -> Dict[str, Any]:
     cycle_stats = calculate_cycle_statistics(cycle_events)
     
     # Format message
+    total_periods = "complete cycles" if cycle_stats.get('current_period') else "cycles"
     message = [
         "📊 Your Cycle Statistics",
         "------------------------",
-        f"Total cycles tracked: {cycle_stats['total_cycles']}",
+        f"Total {total_periods} tracked: {cycle_stats['total_cycles']}",
         f"Average period duration: {round(cycle_stats['average_period_duration'], 1)} days",
         f"Average days between periods: {round(cycle_stats['average_days_between'], 1)} days",
     ]
 
-    # Add last two periods if available
+    # Add current period if available
+    if cycle_stats.get('current_period'):
+        current = cycle_stats['current_period']
+        message.extend([
+            "",
+            "Current Period:",
+            "--------------",
+            f"Started: {current['start_date'].strftime('%Y-%m-%d')}",
+            f"Days logged: {current['days_logged']}"
+        ])
+
+    # Add last two complete periods if available
     if cycle_stats['last_two_periods']:
         message.extend([
             "",
-            "Last Two Periods:",
-            "---------------"
+            "Last Two Complete Periods:",
+            "------------------------"
         ])
         for period in reversed(cycle_stats['last_two_periods']):  # Show most recent first
             start_date = period['start_date'].strftime('%Y-%m-%d')

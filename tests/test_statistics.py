@@ -1,10 +1,19 @@
 """Tests for statistics calculation service."""
-from datetime import date
+from datetime import date, datetime
 import pytest
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType
 from src.services.statistics import calculate_cycle_statistics, find_period_ranges
 from src.services.exceptions import InvalidPeriodDurationError
+
+class MockDateTime:
+    """Mock datetime for testing with fixed date."""
+    def __init__(self, year, month, day):
+        self._now = datetime(year, month, day)
+    
+    def now(self):
+        """Return fixed datetime."""
+        return self._now
 
 def test_calculate_cycle_statistics_with_normal_periods():
     """Test statistics calculation with typical period data."""
@@ -94,14 +103,38 @@ def test_find_period_ranges_with_large_gap():
     assert ranges[0] == (date(2025, 1, 1), date(2025, 1, 2))
     assert ranges[1] == (date(2025, 1, 5), date(2025, 1, 5))
 
-def test_calculate_cycle_statistics_with_invalid_period():
-    """Test that invalid period durations raise appropriate error."""
+def test_calculate_cycle_statistics_with_current_period(monkeypatch):
+    """Test statistics calculation with a current/incomplete period."""
+    # Mock current date to 2025-08-22 to match error log scenario
+    monkeypatch.setattr("src.services.statistics.datetime", MockDateTime(2025, 8, 22))
+    
     events = [
-        # Single-day period (too short)
-        CycleEvent(user_id="test_user", date=date(2025, 1, 1), state=TraditionalPhaseType.MENSTRUATION.value),
+        # First complete period: 5 days
+        CycleEvent(user_id="test_user", date=date(2025, 7, 1), state=TraditionalPhaseType.MENSTRUATION.value),
+        CycleEvent(user_id="test_user", date=date(2025, 7, 2), state=TraditionalPhaseType.MENSTRUATION.value),
+        CycleEvent(user_id="test_user", date=date(2025, 7, 3), state=TraditionalPhaseType.MENSTRUATION.value),
+        CycleEvent(user_id="test_user", date=date(2025, 7, 4), state=TraditionalPhaseType.MENSTRUATION.value),
+        CycleEvent(user_id="test_user", date=date(2025, 7, 5), state=TraditionalPhaseType.MENSTRUATION.value),
         
-        # Long gap...
-        
+        # Current incomplete period (1 day so far)
+        CycleEvent(user_id="test_user", date=date(2025, 8, 21), state=TraditionalPhaseType.MENSTRUATION.value),
+    ]
+    
+    stats = calculate_cycle_statistics(events)
+    
+    # Should only count the complete period in averages
+    assert stats["total_cycles"] == 1
+    assert stats["average_period_duration"] == 5.0
+    
+    # Current period should be detected
+    assert stats["current_period"] is not None
+    assert stats["current_period"]["start_date"] == date(2025, 8, 21)
+    assert stats["current_period"]["last_logged_date"] == date(2025, 8, 21)
+    assert stats["current_period"]["days_logged"] == 1
+
+def test_calculate_cycle_statistics_with_invalid_complete_period():
+    """Test that invalid period durations raise appropriate error for complete periods."""
+    events = [        
         # 12-day period (too long)
         CycleEvent(user_id="test_user", date=date(2025, 2, 1), state=TraditionalPhaseType.MENSTRUATION.value),
         CycleEvent(user_id="test_user", date=date(2025, 2, 12), state=TraditionalPhaseType.MENSTRUATION.value),

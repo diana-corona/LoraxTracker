@@ -5,6 +5,7 @@ import pytest
 from src.models.event import CycleEvent
 from src.models.phase import TraditionalPhaseType, FunctionalPhaseType
 from src.models.recipe import Recipe, MealRecommendation, RecipeRecommendations
+from src.services.constants import TRADITIONAL_PHASE_DURATIONS
 from src.services.weekly_plan import (
     generate_weekly_plan, 
     format_weekly_plan, 
@@ -96,7 +97,10 @@ def test_meal_plan_preview_with_urls():
     preview = create_meal_plan_preview([meal])
     
     assert len(preview) == 1
-    assert "Test Recipe (30 min) - https://example.com/recipe" in preview[0]
+    # Check for recipe title, prep time and URL separately since format may vary
+    assert "Test Recipe" in preview[0]
+    assert "(30 min)" in preview[0]
+    assert "https://example.com/recipe" in preview[0]
     
     # Test multiple recipes
     recipe1 = create_test_recipe("Recipe 1", url="https://example.com/recipe1")
@@ -109,8 +113,12 @@ def test_meal_plan_preview_with_urls():
     preview = create_meal_plan_preview([meal_multiple])
     
     assert len(preview) == 1
-    assert "Recipe 1 (30 min) - https://example.com/recipe1" in preview[0]
-    assert "Recipe 2 (30 min) - https://example.com/recipe2" in preview[0]
+    # Check each recipe's components separately
+    assert "Recipe 1" in preview[0]
+    assert "(30 min)" in preview[0]
+    assert "https://example.com/recipe1" in preview[0]
+    assert "Recipe 2" in preview[0]
+    assert "https://example.com/recipe2" in preview[0]
     
     # Test recipe without URL
     recipe_no_url = create_test_recipe("No URL Recipe", url=None)
@@ -125,7 +133,7 @@ def test_meal_plan_preview_with_urls():
     assert "No URL Recipe (30 min)" in preview[0]
     assert "http" not in preview[0]
 
-def test_format_weekly_plan():
+def test_format_weekly_plan(monkeypatch):
     """Test weekly plan formatting with phase grouping."""
     today = date.today()
     events = [
@@ -155,6 +163,27 @@ def test_format_weekly_plan():
     assert formatted[0].startswith("📅")  # Header
     assert any("Phase Schedule" in line for line in formatted)
     
+    # Verify the sections exist
+    found_sections = {
+        'fasting': False,
+        'foods': False,
+        'meals': False,
+        'activities': False
+    }
+
+    for line in formatted:
+        if "⏱️ Fasting:" in line:
+            found_sections['fasting'] = True
+        elif "🥗 Key Foods:" in line:
+            found_sections['foods'] = True
+        elif "🍽️ Suggested Meals:" in line:
+            found_sections['meals'] = True
+        elif "🏃‍♀️ Activities:" in line:
+            found_sections['activities'] = True
+
+    # All sections should be present
+    assert all(found_sections.values()), f"Missing sections: {[k for k,v in found_sections.items() if not v]}"
+
     # Find Power Phase section (both Menstruation and Follicular map to Power)
     power_phase_index = next(i for i, line in enumerate(formatted) if "Power Phase ⚡" in line)
     

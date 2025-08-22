@@ -60,13 +60,14 @@ def test_generate_list(shopping_service, ingredients):
     result = shopping_service.generate_list(ingredients)
     
     assert isinstance(result, ShoppingList)
-    assert result.proteins == ['chicken', 'eggs']
-    assert result.produce == ['lettuce', 'tomato']
-    assert result.dairy == ['milk', 'cheese']
-    assert result.condiments == ['mayo']
-    assert result.baking == ['flour']
-    assert result.nuts == ['almonds']
-    assert result.pantry == ['salt', 'pepper', 'vinegar']
+    assert sorted(result.proteins.keys()) == ['chicken', 'eggs']
+    assert all(count == 1 for count in result.proteins.values())
+    assert result.produce == {'lettuce': 1, 'tomato': 1}
+    assert result.dairy == {'milk': 1, 'cheese': 1}
+    assert result.condiments == {'mayo': 1}
+    assert result.baking == {'flour': 1}
+    assert result.nuts == {'almonds': 1}
+    assert result.pantry == {'salt': 1, 'pepper': 1, 'vinegar': 1}
 
 def test_generate_list_empty_categories(shopping_service):
     """Test shopping list generation with empty categories."""
