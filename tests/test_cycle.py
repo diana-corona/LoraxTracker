@@ -61,6 +61,7 @@ def test_phase_recommendations():
     assert "13 to 72 hours" in phase.fasting_protocol
     assert any("Healthy fats" in rec for rec in phase.food_recommendations)
     assert any("Clean proteins" in rec for rec in phase.food_recommendations)
+    assert phase.typical_symptoms is None
     
     # Test Second Power Phase recommendations (Days 16-19) - should be identical to first
     phase = get_current_phase(events, date(2024, 1, 17))
@@ -145,6 +146,7 @@ def test_report_generation():
     assert "⏱️ Fasting Protocol" in report
     assert phase.fasting_protocol in report
     assert "Started period" in report
+    assert "🩺 Common Symptoms" not in report  # Ensure symptoms section is removed
 
 def test_prediction_with_recent_longer_cycles():
     """Test prediction when recent cycles are longer than historical ones."""

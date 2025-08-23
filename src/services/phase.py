@@ -89,7 +89,6 @@ def get_current_phase(events: List[CycleEvent], target_date: Optional[date] = No
         functional_phase_duration=func_duration,
         functional_phase_start=func_start,
         functional_phase_end=func_end,
-        typical_symptoms=phase_details["traditional_symptoms"],
         dietary_style=phase_details["dietary_style"],
         fasting_protocol=phase_details["fasting_protocol"],
         food_recommendations=phase_details["food_recommendations"],
@@ -151,7 +150,6 @@ def predict_next_phase(current_phase: Phase) -> Phase:
         functional_phase_duration=func_duration,
         functional_phase_start=func_start,
         functional_phase_end=func_end,
-        typical_symptoms=phase_details["traditional_symptoms"],
         dietary_style=phase_details["dietary_style"],
         fasting_protocol=phase_details["fasting_protocol"],
         food_recommendations=phase_details["food_recommendations"],
@@ -187,10 +185,7 @@ def get_phase_details(traditional_phase: TraditionalPhaseType, cycle_day: int) -
     # Map traditional phase to functional phase
     functional_phase = determine_functional_phase(cycle_day)
     
-    return {
-        "traditional_symptoms": TRADITIONAL_PHASE_SYMPTOMS[traditional_phase],
-        **FUNCTIONAL_PHASE_DETAILS[functional_phase]
-    }
+    return FUNCTIONAL_PHASE_DETAILS[functional_phase]
 
 def get_phase_specific_recommendations(
     traditional_phase: TraditionalPhaseType,
@@ -273,9 +268,6 @@ def generate_phase_report(phase: Phase, events: List[CycleEvent]) -> str:
         "🌙 Phase Report",
         f"Traditional Phase: {phase.traditional_phase.value.title()} ({phase.duration} days remaining)",
         f"Functional Phase: {phase.functional_phase.value.title()} ({phase.functional_phase_duration} days remaining)",
-        "",
-        "🩺 Common Symptoms:",
-        *[f"• {symptom}" for symptom in phase.typical_symptoms],
         "",
         "🍽️ Dietary Style:",
         f"• {phase.dietary_style}",
