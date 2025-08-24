@@ -19,7 +19,8 @@ class TelegramClient:
         self,
         chat_id: str,
         text: str,
-        reply_markup: Optional[Dict[str, Any]] = None
+        reply_markup: Optional[Dict[str, Any]] = None,
+        parse_mode: str = "HTML"
     ) -> Dict[str, Any]:
         """
         Send a message to a specific chat.
@@ -35,7 +36,7 @@ class TelegramClient:
         data = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": "HTML"
+            "parse_mode": parse_mode
         }
         if reply_markup:
             data["reply_markup"] = reply_markup
@@ -112,3 +113,80 @@ class TelegramClient:
         )
         response.raise_for_status()
         return response.json()["result"]
+    
+    def edit_message_reply_markup(
+        self,
+        chat_id: str,
+        message_id: int,
+        reply_markup: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Edit only the inline keyboard of an existing message.
+
+        Args:
+            chat_id: Telegram chat ID
+            message_id: ID of the message to update
+            reply_markup: New keyboard markup dictionary
+
+        Returns:
+            Response wrapper consistent with send_message
+        """
+        data: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id
+        }
+        if reply_markup:
+            data["reply_markup"] = reply_markup
+
+        response = requests.post(
+            f"{self.base_url}/editMessageReplyMarkup",
+            json=data
+        )
+        # Let non-200 errors raise so caller can decide retry/handling
+        response.raise_for_status()
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"ok": True, "result": response.json()})
+        }
+
+    def edit_message_text(
+        self,
+        chat_id: str,
+        message_id: int,
+        text: str,
+        reply_markup: Optional[Dict[str, Any]] = None,
+        parse_mode: str = "Markdown"
+    ) -> Dict[str, Any]:
+        """
+        Edit the text (and optionally keyboard) of an existing message.
+
+        Args:
+            chat_id: Telegram chat ID
+            message_id: ID of the message to update
+            text: New message text
+            reply_markup: Optional updated keyboard
+            parse_mode: Telegram parse mode (default Markdown to support **bold** in existing flows)
+
+        Returns:
+            Response wrapper consistent with send_message
+        """
+        data: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": parse_mode
+        }
+        if reply_markup:
+            data["reply_markup"] = reply_markup
+
+        response = requests.post(
+            f"{self.base_url}/editMessageText",
+            json=data
+        )
+        response.raise_for_status()
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"ok": True, "result": response.json()})
+        }

@@ -181,9 +181,9 @@ class TestPhaseAwareKeyboard:
         assert len(buttons) == 4  # 2 recipes + spacer + skip
         # Check recipe buttons
         assert buttons[0][0]["text"] == "⚡ Recipe 1 (15 min)"
-        assert buttons[0][0]["callback_data"] == "recipe_breakfast_1"
+        assert buttons[0][0]["callback_data"] == "recipe_breakfast_1_power"
         assert buttons[1][0]["text"] == "⚡ Recipe 2 (20 min)"
-        assert buttons[1][0]["callback_data"] == "recipe_breakfast_2"
+        assert buttons[1][0]["callback_data"] == "recipe_breakfast_2_power"
         # Check spacer and skip button
         assert buttons[2] == []  # Empty spacer row
         assert buttons[3][0]["text"] == "Skip this meal 🚫"

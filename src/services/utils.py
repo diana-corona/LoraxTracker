@@ -38,7 +38,20 @@ def get_menstruation_events(events: List[CycleEvent], reverse: bool = False) -> 
 
 def calculate_cycle_day(events: List[CycleEvent], target_date: date = None) -> int:
     """
-    Calculate the current day in the cycle.
+    Calculate the current day in the cycle using the FIRST day of the most recent
+    menstruation sequence (not the last recorded menstruation day).
+    
+    Users typically log each day of menstruation. The previous implementation
+    incorrectly used the *latest* menstruation event which, when the user has
+    already entered future days in the current period, produced a negative
+    offset and cycle_day 0. That forced the functional phase fallback to
+    NURTURE.
+    
+    This function now:
+      1. Collects all menstruation event dates
+      2. Finds the most recent sequence that starts on or before target_date
+      3. Uses the first day of that sequence as day 1
+      4. Clamps the result to a minimum of 1
     
     Args:
         events: List of cycle events
@@ -46,22 +59,36 @@ def calculate_cycle_day(events: List[CycleEvent], target_date: date = None) -> i
         
     Returns:
         Current day number in the cycle (1-based)
-        
-    Example:
-        >>> events = get_user_events(user_id)
-        >>> current_day = calculate_cycle_day(events)
-        >>> specific_day = calculate_cycle_day(events, date(2025, 7, 1))
     """
     if target_date is None:
         target_date = date.today()
-        
-    menstruation_events = get_menstruation_events(events, reverse=True)
     
+    menstruation_events = get_menstruation_events(events, reverse=False)
     if not menstruation_events:
         return 1
-        
-    last_menstruation = menstruation_events[0]
-    return (target_date - last_menstruation.date).days + 1
+    
+    # Build a set of all menstruation dates for fast lookup
+    menstruation_dates = {e.date for e in menstruation_events}
+    
+    # Consider only dates on or before target_date for determining current period
+    past_or_current = [d for d in menstruation_dates if d <= target_date]
+    if not past_or_current:
+        # All logged menstruation events are in the future; treat as pre-cycle
+        return 1
+    
+    # Latest logged menstruation date that is not after target_date
+    latest_logged = max(past_or_current)
+    
+    # Walk backwards to find the first day of the contiguous menstruation block
+    start_date = latest_logged
+    while (start_date - timedelta(days=1)) in menstruation_dates:
+        start_date -= timedelta(days=1)
+    
+    cycle_day = (target_date - start_date).days + 1
+    if cycle_day < 1:
+        cycle_day = 1  # Safety clamp
+    
+    return cycle_day
 
 def determine_traditional_phase(
     cycle_day: int,

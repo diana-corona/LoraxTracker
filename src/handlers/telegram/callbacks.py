@@ -41,21 +41,14 @@ def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
         dynamo, telegram = get_clients()
         chat_id = str(callback_query["message"]["chat"]["id"])
         user_id = str(callback_query["from"]["id"])
-        # Handle recipe selection callbacks from weekly plan
-        if "data" in callback_query and callback_query["data"].startswith("recipe_"):
+        # Handle recipe selection and recipe-related callbacks
+        if "data" in callback_query and (callback_query["data"].startswith("recipe_") or
+                                       callback_query["data"] == "generate_shopping_list" or
+                                       callback_query["data"] == "clear_selections" or
+                                       callback_query["data"] == "select_all_available" or
+                                       callback_query["data"] == "done_selecting"):
             from .commands.weeklyplan import handle_recipe_callback
-            # Convert any stringified JSON in body to dict
-            if isinstance(callback_query.get("data"), str):
-                try:
-                    callback_query = callback_query.copy()
-                    if callback_query["data"].startswith("recipe_"):
-                        # Don't parse recipe callbacks as JSON
-                        pass
-                    else:
-                        callback_query["data"] = json.loads(callback_query["data"])
-                except json.JSONDecodeError:
-                    pass
-            
+            # Recipe callbacks are plain strings, not JSON
             # Wrap callback in a Lambda event structure for middleware
             wrapped_event = {
                 "body": json.dumps({
@@ -64,6 +57,7 @@ def handle_callback_query(callback_query: Dict[str, Any]) -> Dict[str, Any]:
             }
             return handle_recipe_callback(wrapped_event)
             
+        # All other callbacks are JSON
         data = json.loads(callback_query["data"])
         
         if data["action"] == "rate":

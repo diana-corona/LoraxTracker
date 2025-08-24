@@ -185,7 +185,13 @@ def get_phase_details(traditional_phase: TraditionalPhaseType, cycle_day: int) -
     # Map traditional phase to functional phase
     functional_phase = determine_functional_phase(cycle_day)
     
-    return FUNCTIONAL_PHASE_DETAILS[functional_phase]
+    # Start with functional phase details
+    details = dict(FUNCTIONAL_PHASE_DETAILS[functional_phase])
+    
+    # Add traditional phase symptoms
+    details["traditional_symptoms"] = TRADITIONAL_PHASE_SYMPTOMS.get(traditional_phase, [])
+    
+    return details
 
 def get_phase_specific_recommendations(
     traditional_phase: TraditionalPhaseType,

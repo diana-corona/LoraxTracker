@@ -159,15 +159,15 @@ def create_phase_recommendations(
         
     except Exception as e:
         logger.warning(f"Failed to load recommendations for {phase_type.value} phase: {str(e)}")
-        # Graceful fallback - return basic recommendations with empty recipe lists
+        # Graceful fallback - return basic recommendations without recipe fields
         return PhaseRecommendations(
             fasting_protocol=phase_details["fasting_protocol"],
             foods=phase_details["food_recommendations"][:3],
             activities=phase_details["activity_recommendations"][:3],
             supplements=phase_details.get("supplement_recommendations"),
-            recipe_suggestions=[],
-            meal_plan_preview=["No specific meals available for this phase"],
-            shopping_preview=[]
+            recipe_suggestions=None,
+            meal_plan_preview=None,
+            shopping_preview=None
         )
 
 def format_recipe_suggestions(meals: List[MealRecommendation]) -> List[Dict[str, Any]]:

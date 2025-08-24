@@ -204,7 +204,10 @@ def test_phase_aware_selection_flow(
         "body": {
             "callback_query": {
                 "from": {"id": "user123"},
-                "message": {"chat": {"id": "chat123"}},
+                "message": {
+                    "chat": {"id": "chat123"},
+                    "message_id": "789"
+                },
                 "data": "multi_select_breakfast"
             }
         }
@@ -239,7 +242,7 @@ def test_phase_aware_selection_flow(
     assert any(call[1].get('phase') == 'nurture' for call in get_calls)
     
     # Verify phase-specific recipes were shown in the keyboard
-    multi_phase_call = mock_telegram.send_message.call_args_list[2]  # Third call (index 2)
+    multi_phase_call = mock_telegram.edit_message_text.call_args_list[0]  # First edit_message_text call
     print(f"Multi-phase call kwargs: {multi_phase_call.kwargs}")
     keyboard = multi_phase_call.kwargs['reply_markup']
     buttons = keyboard["inline_keyboard"]
@@ -260,7 +263,10 @@ def test_phase_aware_selection_flow(
         "body": {
             "callback_query": {
                 "from": {"id": "user123"},
-                "message": {"chat": {"id": "chat123"}},
+                "message": {
+                    "chat": {"id": "chat123"},
+                    "message_id": "789"
+                },
                 "data": "recipe_breakfast_power1_power"
             }
         }
@@ -279,7 +285,10 @@ def test_phase_aware_selection_flow(
         "body": {
             "callback_query": {
                 "from": {"id": "user123"},
-                "message": {"chat": {"id": "chat123"}},
+                "message": {
+                    "chat": {"id": "chat123"},
+                    "message_id": "789"
+                },
                 "data": "recipe_breakfast_nurture1_nurture"
             }
         }
