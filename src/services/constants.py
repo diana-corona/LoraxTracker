@@ -271,6 +271,7 @@ PHASE_INGREDIENTS = {
 MEAL_ICONS = {
     "breakfast": "🥞",
     "lunch": "🥗",
+    "salad": "🥬",
     "dinner": "🍽️",
     "snack": "🍿"
 }

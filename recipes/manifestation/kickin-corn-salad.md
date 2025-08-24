@@ -8,6 +8,7 @@
 
 ## Tags
 - lunch
+- salad
 - side dish
 
 ## Ingredients

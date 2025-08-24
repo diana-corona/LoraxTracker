@@ -22,6 +22,7 @@ class RecipeSelection:
     """Enhanced recipe selection supporting both single and multi-phase selections."""
     breakfast: List[PhaseRecipeSelection]
     lunch: List[PhaseRecipeSelection]
+    salad: List[PhaseRecipeSelection]
     dinner: List[PhaseRecipeSelection]
     snack: List[PhaseRecipeSelection]
     mode: SelectionMode
@@ -32,6 +33,7 @@ class RecipeSelection:
         """Initialize with empty selections."""
         self.breakfast = []
         self.lunch = []
+        self.salad = []
         self.dinner = []
         self.snack = []
         self.mode = mode
@@ -55,7 +57,7 @@ class RecipeSelection:
         if self.mode == SelectionMode.MULTI_SELECT:
             return len(self.selected_recipes) > 0
             
-        meal_types = [self.breakfast, self.lunch, self.dinner, self.snack]
+        meal_types = [self.breakfast, self.lunch, self.salad, self.dinner, self.snack]
         
         if self.mode == SelectionMode.SINGLE:
             return all(len(meal) == 1 for meal in meal_types)
@@ -80,6 +82,10 @@ class RecipeSelection:
                 {'recipe_id': s.recipe_id, 'phase': s.phase}
                 for s in self.lunch if s.recipe_id
             ],
+            'salad': [
+                {'recipe_id': s.recipe_id, 'phase': s.phase}
+                for s in self.salad if s.recipe_id
+            ],
             'dinner': [
                 {'recipe_id': s.recipe_id, 'phase': s.phase}
                 for s in self.dinner if s.recipe_id
@@ -100,6 +106,7 @@ class RecipeSelection:
         all_selections = (
             self.breakfast +
             self.lunch +
+            self.salad +
             self.dinner +
             self.snack
         )
@@ -146,7 +153,7 @@ class RecipeSelection:
         if recipe_id in self.selected_recipes:
             self.selected_recipes.remove(recipe_id)
             # Also remove from meal-specific lists
-            for m_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+            for m_type in ['breakfast', 'lunch', 'salad', 'dinner', 'snack']:
                 meal_selections = getattr(self, m_type)
                 meal_selections[:] = [s for s in meal_selections if s.recipe_id != recipe_id]
         else:
@@ -174,6 +181,7 @@ class RecipeSelection:
         # Clear selections
         self.breakfast.clear()
         self.lunch.clear()
+        self.salad.clear()
         self.dinner.clear()
         self.snack.clear()
         self.selected_recipes.clear()

@@ -83,8 +83,8 @@ def create_phase_recommendations(
             logger.warning(f"Failed to load recipes for {phase_type.value} phase: {str(e)}")
             phase_recipes = {}
         
-        # Get recipe recommendations for each meal type
-        for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+        # Get recipe recommendations for each meal type (including new salad category)
+        for meal_type in ['breakfast', 'lunch', 'salad', 'dinner', 'snack']:
             recipes_data = phase_recipes.get(meal_type, [])
             if recipes_data:
                 # Convert recipe data to Recipe objects

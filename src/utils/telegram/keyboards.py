@@ -66,6 +66,7 @@ def create_rating_keyboard() -> Dict[str, Any]:
 MEAL_EMOJIS = {
     'breakfast': '🥞',
     'lunch': '🥗',
+    'salad': '🥬',
     'dinner': '🍽️',
     'snack': '🍿'
 }
@@ -181,7 +182,7 @@ def create_multi_recipe_selection_keyboard(
     selected_recipe_ids = selected_recipe_ids or []
     buttons = []
     
-    meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
+    meal_order = ['breakfast', 'lunch', 'salad', 'dinner', 'snack']
     total_selected = len(selected_recipe_ids)
     
     # Determine if we have multi-phase data

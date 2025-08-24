@@ -72,12 +72,13 @@ def get_table_name() -> str:
 MEAL_EMOJIS = {
     'breakfast': '🥞',
     'lunch': '🥗',
+    'salad': '🥬',
     'dinner': '🍽️',
     'snack': '🍿'
 }
 
 # Meal type order
-MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack']
+MEAL_ORDER = ['breakfast', 'lunch', 'salad', 'dinner', 'snack']
 
 
 def _get_recipe_service(test_mode: bool):

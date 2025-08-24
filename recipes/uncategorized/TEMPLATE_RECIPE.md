@@ -38,6 +38,7 @@
 ## Tags
 - lunch
 - dinner
+- salad
 
 ## Ingredients
 - 1 cup quinoa

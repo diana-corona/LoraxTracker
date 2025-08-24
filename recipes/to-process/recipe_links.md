@@ -83,7 +83,23 @@ This file contains a list of recipe URLs that need to be processed and converted
 - [x] https://drmindypelz.com/simple-strawberry-cilantro-salad/ (processed on 2025-07-27)
 - [x] https://preppykitchen.com/chicken-fajitas/ (processed on 2025-07-27)
 - [x] https://preppykitchen.com/chicken-parmesan/ (processed on 2025-07-27)
-
+- [x] https://www.thebreadshebakes.com/2015/03/brazilian-tapioca-flour-buns/ (processed on 2025-08-24)
+- [x] https://preppykitchen.com/cucumber-salad/ (processed on 2025-08-24)
+- [x] https://preppykitchen.com/potato-salad/ (processed on 2025-08-24)
+- [x] https://preppykitchen.com/corn-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/avocado-and-corn-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/dill-pickle-pasta-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/pesto-pasta-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/vegan-couscous-salad-with-feta-and-mint/ (duplicate; already processed on 2025-07-27)
+- [x] https://plantyou.com/cauliflower-sweet-potato-couscous-salad/ (duplicate; already processed on 2025-07-27)
+- [x] https://plantyou.com/cucumber-chickpea-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/warm-broccoli-couscous-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/warm-brussels-sprouts-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/lentil-quinoa-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/meal-prep-pasta-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/vegan-broccoli-salad/ (processed on 2025-08-24)
+- [x] https://plantyou.com/ariana-grandes-salad-recipe/ (processed on 2025-08-24)
+- [x] https://plantyou.com/deconstructed-spring-roll-salad/ (processed on 2025-08-24)
 
 ## Notes
 - URLs should be direct links to recipe pages

@@ -191,6 +191,7 @@ class RecipeService:
         meal_type_counts = {
             'breakfast': 0,
             'lunch': 0,
+            'salad': 0,
             'dinner': 0,
             'snack': 0
         }
@@ -212,6 +213,7 @@ class RecipeService:
         meal_type_fresh_recipes: Dict[str, List[tuple[Path, Recipe]]] = {
             'breakfast': [],
             'lunch': [],
+            'salad': [],
             'dinner': [],
             'snack': []
         }
@@ -502,7 +504,7 @@ class RecipeService:
 
     def balance_meal_types(self, recipes: List[Recipe]) -> List[MealRecommendation]:
         """Balance recipes across meal types."""
-        meal_types = {"breakfast": [], "lunch": [], "dinner": [], "snack": []}
+        meal_types = {"breakfast": [], "lunch": [], "salad": [], "dinner": [], "snack": []}
         general_recipes = []
 
         # Sort recipes into meal types
@@ -737,6 +739,7 @@ class RecipeService:
                 all_phase_recipes[phase] = {
                     'breakfast': [],
                     'lunch': [],
+                    'salad': [],
                     'dinner': [],
                     'snack': []
                 }
@@ -774,7 +777,7 @@ class RecipeService:
             self.load_recipes_for_meal_planning(phase, user_id)
             
             # Get recipes for each meal type
-            for meal_type in ['breakfast', 'lunch', 'dinner', 'snack']:
+            for meal_type in ['breakfast', 'lunch', 'salad', 'dinner', 'snack']:
                 recipes = self.get_recipes_by_meal_type(
                     meal_type=meal_type,
                     phase=phase,
